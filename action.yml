@@ -1,0 +1,67 @@
+name: Cedana Test Summary
+description: Summarize JUnit test results to the job summary, the pull request, and Slack, with links to the failing jobs
+author: Cedana
+
+branding:
+  icon: check-square
+  color: green
+
+inputs:
+  reports:
+    description: Glob patterns (one per line) matching the JUnit XML reports to summarize.
+    required: false
+    default: "**/*.xml"
+  title:
+    description: Title of the summary. Also identifies the pull request comment to update.
+    required: false
+    default: Tests
+  github-token:
+    description: GitHub token used to list workflow jobs and comment on the pull request.
+    required: false
+    default: ${{ github.token }}
+  jobs-filter:
+    description: >-
+      Regular expression matched against workflow job names. Only matching jobs are reported
+      when they fail without producing a test report. Defaults to every job in the run.
+    required: false
+    default: ""
+  step-summary:
+    description: Write the summary to the GitHub step summary.
+    required: false
+    default: "true"
+  pr-comment:
+    description: Post the summary as a comment on the pull request, updating it on later runs.
+    required: false
+    default: "true"
+  slack-webhook-url:
+    description: Slack incoming webhook URL to post the summary to. Skipped when empty.
+    required: false
+  anthropic-api-key:
+    description: Anthropic API key. When set, failures are analyzed by Claude and a short analysis is added.
+    required: false
+  anthropic-model:
+    description: Claude model used for the failure analysis.
+    required: false
+    default: claude-opus-5-5
+  dry-run:
+    description: Build the summary without commenting or posting to Slack.
+    required: false
+    default: "false"
+
+outputs:
+  conclusion:
+    description: "`success` when every test passed and no job failed, otherwise `failure`."
+  passed:
+    description: Number of passed tests.
+  failed:
+    description: Number of failed tests.
+  skipped:
+    description: Number of skipped tests.
+  markdown:
+    description: The summary as GitHub-flavored markdown.
+  payload:
+    description: The Slack Block Kit payload.
+
+runs:
+  using: node20
+  main: dist/index.js

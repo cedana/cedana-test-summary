@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites time="3">
+<testsuite name="test/regression/plugins/runc/dump.bats" tests="2" failures="0" errors="0" skipped="0" time="3" timestamp="2026-10-03T22:49:06" hostname="runner">
+    <testcase classname="test/regression/plugins/runc/dump.bats" name="dump container" time="1.5" />
+    <testcase classname="test/regression/plugins/runc/dump.bats" name="dump container (nested)" time="1.5" />
+</testsuite>
+</testsuites>
