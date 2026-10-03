@@ -43,6 +43,41 @@ function findJob(jobs, label) {
     return jobs.find((job) => job.name === label || job.name.endsWith(` / ${label}`));
 }
 
+// Jobs that failed in a way the summary should surface: no test report was
+// produced (crashed, timed out, failed before tests ran), or the tests passed
+// but the job still failed. Jobs sharing the summary job's own name (the
+// disabled summary jobs of nested workflows) and cancelled jobs that never
+// started are left out.
+function collectFailedJobs(jobs, groups, filter, runnerName = process.env.RUNNER_NAME) {
+    const reported = new Map();
+    for (const group of groups) {
+        if (group.job) reported.set(group.job.id, group);
+    }
+    const baseName = (name) => name.split(' / ').pop();
+    const self = runnerName && jobs.find((j) => j.status === 'in_progress' && j.runner_name === runnerName);
+    const selfName = self ? baseName(self.name) : null;
+
+    const failed = [];
+    for (const job of jobs) {
+        if (job.status !== 'completed' || !['failure', 'cancelled', 'timed_out'].includes(job.conclusion)) continue;
+        if (!filter.test(job.name)) continue;
+        if (selfName && baseName(job.name) === selfName) continue;
+        const started = (job.steps || []).some((s) => s.status === 'completed' && s.conclusion === 'success');
+        if (job.conclusion === 'cancelled' && !started) continue;
+        const group = reported.get(job.id);
+        if (group && group.failed > 0) continue;
+        const outcome = job.conclusion === 'failure' ? 'failed' : job.conclusion.replace('_', ' ');
+        failed.push({
+            id: job.id,
+            name: baseName(job.name),
+            html_url: job.html_url,
+            conclusion: job.conclusion,
+            reason: group ? `tests passed, job ${outcome}` : `${outcome} without a test report`,
+        });
+    }
+    return failed.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 // The pull request for this run: from the event payload when triggered by a
 // pull request, otherwise the first open pull request for the commit.
 async function findPullRequest(token, repository, sha) {
@@ -71,4 +106,4 @@ async function upsertComment(token, repository, number, marker, body) {
     return request(token, `/repos/${repository}/issues/${number}/comments`, { method: 'POST', body: { body } });
 }
 
-module.exports = { request, listJobs, findJob, findPullRequest, upsertComment };
+module.exports = { request, listJobs, findJob, collectFailedJobs, findPullRequest, upsertComment };

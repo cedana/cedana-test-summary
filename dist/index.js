@@ -101184,6 +101184,41 @@ function findJob(jobs, label) {
     return jobs.find((job) => job.name === label || job.name.endsWith(` / ${label}`));
 }
 
+// Jobs that failed in a way the summary should surface: no test report was
+// produced (crashed, timed out, failed before tests ran), or the tests passed
+// but the job still failed. Jobs sharing the summary job's own name (the
+// disabled summary jobs of nested workflows) and cancelled jobs that never
+// started are left out.
+function collectFailedJobs(jobs, groups, filter, runnerName = process.env.RUNNER_NAME) {
+    const reported = new Map();
+    for (const group of groups) {
+        if (group.job) reported.set(group.job.id, group);
+    }
+    const baseName = (name) => name.split(' / ').pop();
+    const self = runnerName && jobs.find((j) => j.status === 'in_progress' && j.runner_name === runnerName);
+    const selfName = self ? baseName(self.name) : null;
+
+    const failed = [];
+    for (const job of jobs) {
+        if (job.status !== 'completed' || !['failure', 'cancelled', 'timed_out'].includes(job.conclusion)) continue;
+        if (!filter.test(job.name)) continue;
+        if (selfName && baseName(job.name) === selfName) continue;
+        const started = (job.steps || []).some((s) => s.status === 'completed' && s.conclusion === 'success');
+        if (job.conclusion === 'cancelled' && !started) continue;
+        const group = reported.get(job.id);
+        if (group && group.failed > 0) continue;
+        const outcome = job.conclusion === 'failure' ? 'failed' : job.conclusion.replace('_', ' ');
+        failed.push({
+            id: job.id,
+            name: baseName(job.name),
+            html_url: job.html_url,
+            conclusion: job.conclusion,
+            reason: group ? `tests passed, job ${outcome}` : `${outcome} without a test report`,
+        });
+    }
+    return failed.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 // The pull request for this run: from the event payload when triggered by a
 // pull request, otherwise the first open pull request for the commit.
 async function findPullRequest(token, repository, sha) {
@@ -101212,7 +101247,7 @@ async function upsertComment(token, repository, number, marker, body) {
     return request(token, `/repos/${repository}/issues/${number}/comments`, { method: 'POST', body: { body } });
 }
 
-module.exports = { request, listJobs, findJob, findPullRequest, upsertComment };
+module.exports = { request, listJobs, findJob, collectFailedJobs, findPullRequest, upsertComment };
 
 
 /***/ }),
@@ -101241,11 +101276,16 @@ function decodeEntities(value) {
         .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
 }
 
+// Strip ANSI color codes, including ones whose escape byte was already dropped ("[90m").
+function stripAnsi(value) {
+    return value.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\[(\d{1,3}(;\d{1,3})*)?m/g, '');
+}
+
 function text(node) {
     if (node == null) return '';
-    if (typeof node === 'string') return decodeEntities(node);
+    if (typeof node === 'string') return stripAnsi(decodeEntities(node));
     if (Array.isArray(node)) return node.map(text).join('\n');
-    return decodeEntities(node['#text'] || '');
+    return stripAnsi(decodeEntities(node['#text'] || ''));
 }
 
 function number(value) {
@@ -101263,15 +101303,19 @@ function variantOf(file) {
     return path.basename(file, path.extname(file)).replace(/^report-?/, '');
 }
 
-// Parse a single JUnit XML file into { label, variant, time, tests }.
+// Parse a single JUnit XML file into { label, variant, time, tests }, or null
+// when the file is empty or truncated (a job cancelled while bats was running).
 // The label is the <testsuites name="..."> attribute, falling back to the
 // parent directory name (the artifact name, when downloaded with actions/download-artifact).
 function parseReport(file) {
     const doc = parser.parse(fs.readFileSync(file, 'utf8'));
-    const root = doc.testsuites || { testsuite: doc.testsuite ? [].concat(doc.testsuite) : [] };
+    if (!doc.testsuites && !doc.testsuite) return null;
+    const root = doc.testsuites || { testsuite: doc.testsuite };
     const label = (root.name || '').trim() || path.basename(path.dirname(file));
     const variant = variantOf(file);
-    const tests = [];
+    // Retried tests (BATS_TEST_RETRIES) appear once per attempt; keep one entry
+    // per test with the last attempt's status, flagged as flaky if it recovered.
+    const tests = new Map();
     let time = 0;
 
     for (const suite of root.testsuite || []) {
@@ -101287,26 +101331,44 @@ function parseReport(file) {
                 status = 'skipped';
                 message = text(testcase.skipped).trim();
             }
-            tests.push({
-                suite: shortSuite(suite.name || testcase.classname),
-                name: (testcase.name || '').trim(),
-                status,
-                message,
-                time: number(testcase.time),
-                variant,
-            });
+            const suiteName = shortSuite(suite.name || testcase.classname);
+            const name = (testcase.name || '').trim();
+            const key = `${suiteName}\n${name}`;
+            const previous = tests.get(key);
+            if (previous) {
+                previous.attempts += 1;
+                previous.flaky = previous.flaky || (previous.status === 'failed' && status === 'passed');
+                previous.status = status;
+                if (message.length > previous.message.length) previous.message = message;
+                previous.time += number(testcase.time);
+            } else {
+                tests.set(key, {
+                    suite: suiteName,
+                    name,
+                    status,
+                    message,
+                    time: number(testcase.time),
+                    variant,
+                    attempts: 1,
+                    flaky: false,
+                });
+            }
         }
     }
 
-    return { label, variant, time, tests };
+    return { label, variant, time, tests: [...tests.values()] };
 }
 
 // Parse all files and group them by label. Each group aggregates every report
 // file that shares the label (e.g. the isolated and persistent runs of one job).
-function parseReports(files) {
+function parseReports(files, log = () => {}) {
     const groups = new Map();
     for (const file of files) {
         const report = parseReport(file);
+        if (!report) {
+            log(`Skipping empty or truncated report ${file}`);
+            continue;
+        }
         let group = groups.get(report.label);
         if (!group) {
             group = { label: report.label, files: [], variants: new Set(), tests: [], time: 0 };
@@ -101332,6 +101394,7 @@ function parseReports(files) {
             passed: count('passed'),
             failed: count('failed'),
             skipped: count('skipped'),
+            flaky: group.tests.filter((t) => t.flaky).length,
         });
     }
     return result;
@@ -101349,8 +101412,10 @@ const slackifyMarkdown = __nccwpck_require__(90568);
 
 const MAX_COMMENT_CHARS = 60000;
 const MAX_FAILED_TESTS_PER_GROUP = 20;
-const MAX_MESSAGE_LINES = 30;
+const MAX_MESSAGE_LINES = 14;
+const MESSAGE_HEAD_LINES = 4;
 const MAX_MESSAGE_CHARS = 2500;
+const MAX_FLAKY_TESTS = 20;
 
 const MAX_BLOCKS = 50;
 const MAX_SECTION_TEXT = 3000;
@@ -101389,12 +101454,24 @@ function truncate(text, max) {
     return text.slice(0, max - 2).trimEnd() + ' …';
 }
 
+// Keep the start (where bats says which assertion failed) and the end (where
+// the actual error usually is) of long output.
 function clipMessage(message, maxLines) {
     if (maxLines <= 0) return '';
     const lines = message.split('\n');
-    let out = lines.slice(0, maxLines).join('\n');
+    let out;
+    if (lines.length <= maxLines) {
+        out = lines.join('\n');
+    } else {
+        const head = Math.min(MESSAGE_HEAD_LINES, maxLines);
+        const tail = maxLines - head;
+        out = [
+            ...lines.slice(0, head),
+            `… (${lines.length - maxLines} lines omitted) …`,
+            ...(tail > 0 ? lines.slice(lines.length - tail) : []),
+        ].join('\n');
+    }
     if (out.length > MAX_MESSAGE_CHARS) out = out.slice(0, MAX_MESSAGE_CHARS).trimEnd() + ' …';
-    else if (lines.length > maxLines) out += `\n… (${lines.length - maxLines} more lines)`;
     return out;
 }
 
@@ -101405,6 +101482,16 @@ function testTitle(group, test) {
 
 function failedTests(group) {
     return group.tests.filter((t) => t.status === 'failed');
+}
+
+function flakyTests(groups) {
+    const flaky = [];
+    for (const group of groups) {
+        for (const test of group.tests) {
+            if (test.flaky) flaky.push({ group, test });
+        }
+    }
+    return flaky;
 }
 
 function icon(group) {
@@ -101426,6 +101513,7 @@ function summaryLine(totals, groups) {
     if (totals.failed > 0) parts.push(`**${n(totals.failed)} failed**`);
     parts.push(`${n(totals.passed)} passed`);
     if (totals.skipped > 0) parts.push(`${n(totals.skipped)} skipped`);
+    if (totals.flaky > 0) parts.push(`${n(totals.flaky)} flaky`);
     parts.push(plural(groups.length, 'suite'));
     return parts.join(' · ');
 }
@@ -101480,6 +101568,21 @@ function renderMarkdown({ title, groups, totals, failedJobs, analysis, context, 
         for (const job of failedJobs) {
             out.push(`- ${link(escapeMd(job.name), job.html_url)} — ${job.reason}`);
         }
+        out.push('');
+    }
+
+    const flaky = flakyTests(sorted);
+    if (flaky.length > 0) {
+        out.push('<details>');
+        out.push(`<summary>⚠️ ${plural(flaky.length, 'flaky test')} (passed on retry)</summary>`);
+        out.push('');
+        for (const { group, test } of flaky.slice(0, MAX_FLAKY_TESTS)) {
+            const { title: t, variant } = testTitle(group, test);
+            out.push(`- ${link(escapeMd(group.label), group.job?.html_url)} › ${escapeMd(t)}${variant ? ` _${escapeMd(variant)}_` : ''}`);
+        }
+        if (flaky.length > MAX_FLAKY_TESTS) out.push(`- _… ${n(flaky.length - MAX_FLAKY_TESTS)} more_`);
+        out.push('');
+        out.push('</details>');
         out.push('');
     }
 
@@ -101587,6 +101690,17 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context }) {
         blocks.push({ type: 'section', text: { type: 'mrkdwn', text: truncate(lines.join('\n'), MAX_SECTION_TEXT) } });
     }
 
+    const flaky = flakyTests(sorted);
+    if (flaky.length > 0) {
+        const lines = [`:warning: *${plural(flaky.length, 'flaky test')}* (passed on retry)`];
+        for (const { group, test } of flaky.slice(0, MAX_SLACK_TESTS_PER_GROUP)) {
+            const { title: t, variant } = testTitle(group, test);
+            lines.push(`• ${slackLink(group.label, group.job?.html_url)} › ${t}${variant ? ` _${variant}_` : ''}`);
+        }
+        if (flaky.length > MAX_SLACK_TESTS_PER_GROUP) lines.push(`• _… ${n(flaky.length - MAX_SLACK_TESTS_PER_GROUP)} more_`);
+        blocks.push({ type: 'section', text: { type: 'mrkdwn', text: truncate(lines.join('\n'), MAX_SECTION_TEXT) } });
+    }
+
     if (analysis) {
         blocks.push({ type: 'divider' });
         blocks.push({
@@ -101666,7 +101780,7 @@ var __webpack_exports__ = {};
 const core = __nccwpck_require__(37484);
 const glob = __nccwpck_require__(47206);
 const { parseReports } = __nccwpck_require__(66048);
-const { listJobs, findJob, findPullRequest, upsertComment } = __nccwpck_require__(96377);
+const { listJobs, findJob, collectFailedJobs, findPullRequest, upsertComment } = __nccwpck_require__(96377);
 const { renderMarkdown, renderSlack } = __nccwpck_require__(62402);
 const { analyze } = __nccwpck_require__(54992);
 
@@ -101674,33 +101788,6 @@ const SERVER_URL = process.env.GITHUB_SERVER_URL || 'https://github.com';
 const REPOSITORY = process.env.GITHUB_REPOSITORY;
 const RUN_ID = process.env.GITHUB_RUN_ID;
 const SHA = process.env.GITHUB_SHA;
-
-// Jobs that failed, grouped with the reason the summary cares about: no test
-// report was produced (crashed, timed out, failed before tests ran), or the
-// tests all passed but the job still failed.
-function collectFailedJobs(jobs, groups, filter) {
-    const reported = new Map();
-    for (const group of groups) {
-        if (group.job) reported.set(group.job.id, group);
-    }
-    const failed = [];
-    for (const job of jobs) {
-        if (job.status !== 'completed' || !['failure', 'cancelled', 'timed_out'].includes(job.conclusion)) continue;
-        if (!filter.test(job.name)) continue;
-        const group = reported.get(job.id);
-        if (group && group.failed > 0) continue;
-        const outcome = job.conclusion === 'failure' ? 'failed' : job.conclusion.replace('_', ' ');
-        failed.push({
-            id: job.id,
-            // Drop the caller prefixes of reusable workflows ("Test / GPU / CUDA (...)").
-            name: job.name.split(' / ').pop(),
-            html_url: job.html_url,
-            conclusion: job.conclusion,
-            reason: group ? `tests passed, job ${outcome}` : `${outcome} without a test report`,
-        });
-    }
-    return failed.sort((a, b) => a.name.localeCompare(b.name));
-}
 
 async function run() {
     const patterns = core.getInput('reports', { required: true });
@@ -101716,7 +101803,7 @@ async function run() {
 
     const files = await (await glob.create(patterns)).glob();
     core.info(`Found ${files.length} report file(s)`);
-    const groups = parseReports(files);
+    const groups = parseReports(files, core.info);
 
     let jobs = [];
     if (RUN_ID) {
@@ -101732,12 +101819,13 @@ async function run() {
     }
     const failedJobs = collectFailedJobs(jobs, groups, jobsFilter);
 
-    const totals = { total: 0, passed: 0, failed: 0, skipped: 0 };
+    const totals = { total: 0, passed: 0, failed: 0, skipped: 0, flaky: 0 };
     for (const group of groups) {
         totals.total += group.total;
         totals.passed += group.passed;
         totals.failed += group.failed;
         totals.skipped += group.skipped;
+        totals.flaky += group.flaky;
     }
 
     let pullRequest = null;
@@ -101778,7 +101866,9 @@ async function run() {
     core.setOutput('skipped', totals.skipped);
     core.setOutput('markdown', markdown);
     core.setOutput('payload', JSON.stringify(payload));
-    core.info(`${title}: ${totals.passed} passed, ${totals.failed} failed, ${totals.skipped} skipped, ${failedJobs.length} failed job(s)`);
+    core.info(
+        `${title}: ${totals.passed} passed, ${totals.failed} failed, ${totals.skipped} skipped, ${totals.flaky} flaky, ${failedJobs.length} failed job(s)`
+    );
 
     if (stepSummary) {
         await core.summary.addRaw(markdown, true).write();

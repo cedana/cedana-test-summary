@@ -1,7 +1,7 @@
 const core = require('@actions/core');
 const glob = require('@actions/glob');
 const { parseReports } = require('./junit');
-const { listJobs, findJob, findPullRequest, upsertComment } = require('./github');
+const { listJobs, findJob, collectFailedJobs, findPullRequest, upsertComment } = require('./github');
 const { renderMarkdown, renderSlack } = require('./render');
 const { analyze } = require('./ai');
 
@@ -9,33 +9,6 @@ const SERVER_URL = process.env.GITHUB_SERVER_URL || 'https://github.com';
 const REPOSITORY = process.env.GITHUB_REPOSITORY;
 const RUN_ID = process.env.GITHUB_RUN_ID;
 const SHA = process.env.GITHUB_SHA;
-
-// Jobs that failed, grouped with the reason the summary cares about: no test
-// report was produced (crashed, timed out, failed before tests ran), or the
-// tests all passed but the job still failed.
-function collectFailedJobs(jobs, groups, filter) {
-    const reported = new Map();
-    for (const group of groups) {
-        if (group.job) reported.set(group.job.id, group);
-    }
-    const failed = [];
-    for (const job of jobs) {
-        if (job.status !== 'completed' || !['failure', 'cancelled', 'timed_out'].includes(job.conclusion)) continue;
-        if (!filter.test(job.name)) continue;
-        const group = reported.get(job.id);
-        if (group && group.failed > 0) continue;
-        const outcome = job.conclusion === 'failure' ? 'failed' : job.conclusion.replace('_', ' ');
-        failed.push({
-            id: job.id,
-            // Drop the caller prefixes of reusable workflows ("Test / GPU / CUDA (...)").
-            name: job.name.split(' / ').pop(),
-            html_url: job.html_url,
-            conclusion: job.conclusion,
-            reason: group ? `tests passed, job ${outcome}` : `${outcome} without a test report`,
-        });
-    }
-    return failed.sort((a, b) => a.name.localeCompare(b.name));
-}
 
 async function run() {
     const patterns = core.getInput('reports', { required: true });
@@ -51,7 +24,7 @@ async function run() {
 
     const files = await (await glob.create(patterns)).glob();
     core.info(`Found ${files.length} report file(s)`);
-    const groups = parseReports(files);
+    const groups = parseReports(files, core.info);
 
     let jobs = [];
     if (RUN_ID) {
@@ -67,12 +40,13 @@ async function run() {
     }
     const failedJobs = collectFailedJobs(jobs, groups, jobsFilter);
 
-    const totals = { total: 0, passed: 0, failed: 0, skipped: 0 };
+    const totals = { total: 0, passed: 0, failed: 0, skipped: 0, flaky: 0 };
     for (const group of groups) {
         totals.total += group.total;
         totals.passed += group.passed;
         totals.failed += group.failed;
         totals.skipped += group.skipped;
+        totals.flaky += group.flaky;
     }
 
     let pullRequest = null;
@@ -113,7 +87,9 @@ async function run() {
     core.setOutput('skipped', totals.skipped);
     core.setOutput('markdown', markdown);
     core.setOutput('payload', JSON.stringify(payload));
-    core.info(`${title}: ${totals.passed} passed, ${totals.failed} failed, ${totals.skipped} skipped, ${failedJobs.length} failed job(s)`);
+    core.info(
+        `${title}: ${totals.passed} passed, ${totals.failed} failed, ${totals.skipped} skipped, ${totals.flaky} flaky, ${failedJobs.length} failed job(s)`
+    );
 
     if (stepSummary) {
         await core.summary.addRaw(markdown, true).write();

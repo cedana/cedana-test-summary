@@ -19,11 +19,16 @@ function decodeEntities(value) {
         .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
 }
 
+// Strip ANSI color codes, including ones whose escape byte was already dropped ("[90m").
+function stripAnsi(value) {
+    return value.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\[(\d{1,3}(;\d{1,3})*)?m/g, '');
+}
+
 function text(node) {
     if (node == null) return '';
-    if (typeof node === 'string') return decodeEntities(node);
+    if (typeof node === 'string') return stripAnsi(decodeEntities(node));
     if (Array.isArray(node)) return node.map(text).join('\n');
-    return decodeEntities(node['#text'] || '');
+    return stripAnsi(decodeEntities(node['#text'] || ''));
 }
 
 function number(value) {
@@ -41,15 +46,19 @@ function variantOf(file) {
     return path.basename(file, path.extname(file)).replace(/^report-?/, '');
 }
 
-// Parse a single JUnit XML file into { label, variant, time, tests }.
+// Parse a single JUnit XML file into { label, variant, time, tests }, or null
+// when the file is empty or truncated (a job cancelled while bats was running).
 // The label is the <testsuites name="..."> attribute, falling back to the
 // parent directory name (the artifact name, when downloaded with actions/download-artifact).
 function parseReport(file) {
     const doc = parser.parse(fs.readFileSync(file, 'utf8'));
-    const root = doc.testsuites || { testsuite: doc.testsuite ? [].concat(doc.testsuite) : [] };
+    if (!doc.testsuites && !doc.testsuite) return null;
+    const root = doc.testsuites || { testsuite: doc.testsuite };
     const label = (root.name || '').trim() || path.basename(path.dirname(file));
     const variant = variantOf(file);
-    const tests = [];
+    // Retried tests (BATS_TEST_RETRIES) appear once per attempt; keep one entry
+    // per test with the last attempt's status, flagged as flaky if it recovered.
+    const tests = new Map();
     let time = 0;
 
     for (const suite of root.testsuite || []) {
@@ -65,26 +74,44 @@ function parseReport(file) {
                 status = 'skipped';
                 message = text(testcase.skipped).trim();
             }
-            tests.push({
-                suite: shortSuite(suite.name || testcase.classname),
-                name: (testcase.name || '').trim(),
-                status,
-                message,
-                time: number(testcase.time),
-                variant,
-            });
+            const suiteName = shortSuite(suite.name || testcase.classname);
+            const name = (testcase.name || '').trim();
+            const key = `${suiteName}\n${name}`;
+            const previous = tests.get(key);
+            if (previous) {
+                previous.attempts += 1;
+                previous.flaky = previous.flaky || (previous.status === 'failed' && status === 'passed');
+                previous.status = status;
+                if (message.length > previous.message.length) previous.message = message;
+                previous.time += number(testcase.time);
+            } else {
+                tests.set(key, {
+                    suite: suiteName,
+                    name,
+                    status,
+                    message,
+                    time: number(testcase.time),
+                    variant,
+                    attempts: 1,
+                    flaky: false,
+                });
+            }
         }
     }
 
-    return { label, variant, time, tests };
+    return { label, variant, time, tests: [...tests.values()] };
 }
 
 // Parse all files and group them by label. Each group aggregates every report
 // file that shares the label (e.g. the isolated and persistent runs of one job).
-function parseReports(files) {
+function parseReports(files, log = () => {}) {
     const groups = new Map();
     for (const file of files) {
         const report = parseReport(file);
+        if (!report) {
+            log(`Skipping empty or truncated report ${file}`);
+            continue;
+        }
         let group = groups.get(report.label);
         if (!group) {
             group = { label: report.label, files: [], variants: new Set(), tests: [], time: 0 };
@@ -110,6 +137,7 @@ function parseReports(files) {
             passed: count('passed'),
             failed: count('failed'),
             skipped: count('skipped'),
+            flaky: group.tests.filter((t) => t.flaky).length,
         });
     }
     return result;

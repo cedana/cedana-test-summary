@@ -2,8 +2,10 @@ const slackifyMarkdown = require('slackify-markdown');
 
 const MAX_COMMENT_CHARS = 60000;
 const MAX_FAILED_TESTS_PER_GROUP = 20;
-const MAX_MESSAGE_LINES = 30;
+const MAX_MESSAGE_LINES = 14;
+const MESSAGE_HEAD_LINES = 4;
 const MAX_MESSAGE_CHARS = 2500;
+const MAX_FLAKY_TESTS = 20;
 
 const MAX_BLOCKS = 50;
 const MAX_SECTION_TEXT = 3000;
@@ -42,12 +44,24 @@ function truncate(text, max) {
     return text.slice(0, max - 2).trimEnd() + ' …';
 }
 
+// Keep the start (where bats says which assertion failed) and the end (where
+// the actual error usually is) of long output.
 function clipMessage(message, maxLines) {
     if (maxLines <= 0) return '';
     const lines = message.split('\n');
-    let out = lines.slice(0, maxLines).join('\n');
+    let out;
+    if (lines.length <= maxLines) {
+        out = lines.join('\n');
+    } else {
+        const head = Math.min(MESSAGE_HEAD_LINES, maxLines);
+        const tail = maxLines - head;
+        out = [
+            ...lines.slice(0, head),
+            `… (${lines.length - maxLines} lines omitted) …`,
+            ...(tail > 0 ? lines.slice(lines.length - tail) : []),
+        ].join('\n');
+    }
     if (out.length > MAX_MESSAGE_CHARS) out = out.slice(0, MAX_MESSAGE_CHARS).trimEnd() + ' …';
-    else if (lines.length > maxLines) out += `\n… (${lines.length - maxLines} more lines)`;
     return out;
 }
 
@@ -58,6 +72,16 @@ function testTitle(group, test) {
 
 function failedTests(group) {
     return group.tests.filter((t) => t.status === 'failed');
+}
+
+function flakyTests(groups) {
+    const flaky = [];
+    for (const group of groups) {
+        for (const test of group.tests) {
+            if (test.flaky) flaky.push({ group, test });
+        }
+    }
+    return flaky;
 }
 
 function icon(group) {
@@ -79,6 +103,7 @@ function summaryLine(totals, groups) {
     if (totals.failed > 0) parts.push(`**${n(totals.failed)} failed**`);
     parts.push(`${n(totals.passed)} passed`);
     if (totals.skipped > 0) parts.push(`${n(totals.skipped)} skipped`);
+    if (totals.flaky > 0) parts.push(`${n(totals.flaky)} flaky`);
     parts.push(plural(groups.length, 'suite'));
     return parts.join(' · ');
 }
@@ -133,6 +158,21 @@ function renderMarkdown({ title, groups, totals, failedJobs, analysis, context, 
         for (const job of failedJobs) {
             out.push(`- ${link(escapeMd(job.name), job.html_url)} — ${job.reason}`);
         }
+        out.push('');
+    }
+
+    const flaky = flakyTests(sorted);
+    if (flaky.length > 0) {
+        out.push('<details>');
+        out.push(`<summary>⚠️ ${plural(flaky.length, 'flaky test')} (passed on retry)</summary>`);
+        out.push('');
+        for (const { group, test } of flaky.slice(0, MAX_FLAKY_TESTS)) {
+            const { title: t, variant } = testTitle(group, test);
+            out.push(`- ${link(escapeMd(group.label), group.job?.html_url)} › ${escapeMd(t)}${variant ? ` _${escapeMd(variant)}_` : ''}`);
+        }
+        if (flaky.length > MAX_FLAKY_TESTS) out.push(`- _… ${n(flaky.length - MAX_FLAKY_TESTS)} more_`);
+        out.push('');
+        out.push('</details>');
         out.push('');
     }
 
@@ -237,6 +277,17 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context }) {
     if (failedJobs.length > 0) {
         const lines = [':boom: *Failed jobs*'];
         for (const job of failedJobs) lines.push(`• ${slackLink(job.name, job.html_url)} — ${job.reason}`);
+        blocks.push({ type: 'section', text: { type: 'mrkdwn', text: truncate(lines.join('\n'), MAX_SECTION_TEXT) } });
+    }
+
+    const flaky = flakyTests(sorted);
+    if (flaky.length > 0) {
+        const lines = [`:warning: *${plural(flaky.length, 'flaky test')}* (passed on retry)`];
+        for (const { group, test } of flaky.slice(0, MAX_SLACK_TESTS_PER_GROUP)) {
+            const { title: t, variant } = testTitle(group, test);
+            lines.push(`• ${slackLink(group.label, group.job?.html_url)} › ${t}${variant ? ` _${variant}_` : ''}`);
+        }
+        if (flaky.length > MAX_SLACK_TESTS_PER_GROUP) lines.push(`• _… ${n(flaky.length - MAX_SLACK_TESTS_PER_GROUP)} more_`);
         blocks.push({ type: 'section', text: { type: 'mrkdwn', text: truncate(lines.join('\n'), MAX_SECTION_TEXT) } });
     }
 

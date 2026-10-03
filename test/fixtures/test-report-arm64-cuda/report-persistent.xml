@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="CUDA (13-2, streamer, arm64)" time="30">
+<testsuite name="plugins/gpu_streamer.bats" tests="5" failures="3" errors="0" skipped="0" time="30" timestamp="2026-10-03T23:20:00" hostname="runner">
+    <testcase classname="plugins/gpu_streamer.bats" name="stream dump GPU process" time="6" />
+    <testcase classname="plugins/gpu_streamer.bats" name="stream restore GPU process" time="6">
+        <failure type="failure"></failure>
+    </testcase>
+    <testcase classname="plugins/gpu_streamer.bats" name="stream restore GPU process" time="9">
+        <failure type="failure">tags: gpu restore streamer
+(in test file test/regression/plugins/gpu_streamer.bats, line 106)
+  `cedana restore job &quot;$jid&quot;&#39; failed
+[90m23:21:09[0m [32mINF[0m [1mrestoring GPU interception[0m [36mplugin=[0mgpu
+line 5
+line 6
+line 7
+line 8
+line 9
+line 10
+line 11
+line 12
+line 13
+line 14
+line 15
+line 16
+line 17
+line 18
+line 19
+Error: restore failed: controller exited with status 15</failure>
+    </testcase>
+    <testcase classname="plugins/gpu_streamer.bats" name="stream dump GPU container" time="3">
+        <failure type="failure"></failure>
+    </testcase>
+    <testcase classname="plugins/gpu_streamer.bats" name="stream dump GPU container" time="6" />
+</testsuite>
+</testsuites>

@@ -5,7 +5,7 @@ const fs = require('fs');
 
 const { parseReports } = require('../src/junit');
 const { renderMarkdown, renderSlack, duration } = require('../src/render');
-const { findJob } = require('../src/github');
+const { findJob, collectFailedJobs } = require('../src/github');
 const { describeFailures } = require('../src/ai');
 
 const fixtures = path.join(__dirname, 'fixtures');
@@ -16,30 +16,42 @@ const files = fs
     .sort();
 
 const jobs = [
-    { id: 1, name: 'Test / Basic (amd64)', status: 'completed', conclusion: 'failure', html_url: 'https://gh/job/1' },
-    { id: 2, name: 'Test / Plugin (runc, amd64)', status: 'completed', conclusion: 'success', html_url: 'https://gh/job/2' },
-    { id: 3, name: 'Test / Unit (amd64)', status: 'completed', conclusion: 'failure', html_url: 'https://gh/job/3' },
-    { id: 4, name: 'Test / Post Summary', status: 'in_progress', conclusion: null, html_url: 'https://gh/job/4' },
-    { id: 5, name: 'Bench / Run (x)', status: 'completed', conclusion: 'failure', html_url: 'https://gh/job/5' },
+    { id: 1, name: 'Test / Basic (amd64)', status: 'completed', conclusion: 'failure', html_url: 'https://gh/job/1', steps: [{ status: 'completed', conclusion: 'success' }] },
+    { id: 2, name: 'Test / Plugin (runc, amd64)', status: 'completed', conclusion: 'success', html_url: 'https://gh/job/2', steps: [{ status: 'completed', conclusion: 'success' }] },
+    { id: 3, name: 'Test / Unit (amd64)', status: 'completed', conclusion: 'failure', html_url: 'https://gh/job/3', steps: [{ status: 'completed', conclusion: 'success' }] },
+    { id: 4, name: 'Test / Post Summary', status: 'in_progress', conclusion: null, html_url: 'https://gh/job/4', runner_name: 'me', steps: [] },
+    { id: 5, name: 'Bench / Run (x)', status: 'completed', conclusion: 'failure', html_url: 'https://gh/job/5', steps: [{ status: 'completed', conclusion: 'success' }] },
+    { id: 6, name: 'Test / GPU / CUDA (13-2, streamer, arm64)', status: 'completed', conclusion: 'failure', html_url: 'https://gh/job/6', steps: [{ status: 'completed', conclusion: 'success' }] },
+    { id: 7, name: 'Test / Kubernetes / Post Summary', status: 'completed', conclusion: 'cancelled', html_url: 'https://gh/job/7', steps: [] },
+    { id: 8, name: 'Test / Kubernetes / Kubernetes (GKE, CPU, streamer, storage/s3, amd64)', status: 'completed', conclusion: 'cancelled', html_url: 'https://gh/job/8', steps: [{ status: 'completed', conclusion: 'success' }] },
+    { id: 9, name: 'Test / Slurm / Slurm (CPU, x)', status: 'completed', conclusion: 'cancelled', html_url: 'https://gh/job/9', steps: [] },
 ];
 
 function report() {
     const groups = parseReports(files);
     for (const group of groups) group.job = findJob(jobs, group.label) || null;
-    const totals = { passed: 0, failed: 0, skipped: 0 };
+    const totals = { passed: 0, failed: 0, skipped: 0, flaky: 0 };
     for (const g of groups) {
         totals.passed += g.passed;
         totals.failed += g.failed;
         totals.skipped += g.skipped;
+        totals.flaky += g.flaky;
     }
-    const failedJobs = [{ name: 'Test / Unit (amd64)', html_url: 'https://gh/job/3', conclusion: 'failure', reason: 'failed without a test report' }];
+    const failedJobs = collectFailedJobs(jobs, groups, /^Test \/ /, 'me');
     const context = { runUrl: 'https://gh/run/1', runNumber: 7, runAttempt: 1, branch: 'main', sha: 'abcdef1234', commitUrl: 'https://gh/c' };
     return { title: 'Tests', groups, totals, failedJobs, analysis: '', context, marker: '<!-- m -->' };
 }
 
 test('parses and groups bats JUnit reports by testsuites name', () => {
-    const groups = parseReports(files);
-    assert.equal(groups.length, 2);
+    const skipped = [];
+    const groups = parseReports(files, (m) => skipped.push(m));
+    assert.deepEqual(
+        groups.map((g) => g.label).sort(),
+        ['Basic (amd64)', 'CUDA (13-2, streamer, arm64)', 'test-report-amd64-runc']
+    );
+    // Empty files (jobs cancelled mid-run) are skipped rather than reported as 0 tests.
+    assert.equal(skipped.length, 1);
+    assert.match(skipped[0], /test-report-amd64-k8s-cancelled\/report\.xml/);
 
     const basic = groups.find((g) => g.label === 'Basic (amd64)');
     assert.equal(basic.files.length, 2);
@@ -59,32 +71,64 @@ test('parses and groups bats JUnit reports by testsuites name', () => {
     assert.deepEqual([runc.total, runc.passed], [2, 2]);
 });
 
+test('collapses retried tests and flags the ones that recovered as flaky', () => {
+    const cuda = parseReports(files).find((g) => g.label === 'CUDA (13-2, streamer, arm64)');
+    assert.deepEqual([cuda.total, cuda.passed, cuda.failed, cuda.flaky], [3, 2, 1, 1]);
+
+    const restore = cuda.tests.find((t) => t.name === 'stream restore GPU process');
+    assert.equal(restore.status, 'failed');
+    assert.equal(restore.attempts, 2);
+    assert.equal(restore.flaky, false);
+    assert.match(restore.message, /^tags: gpu restore streamer/);
+    assert.match(restore.message, /23:21:09 INF restoring GPU interception plugin=gpu/, 'ANSI codes stripped');
+
+    const dump = cuda.tests.find((t) => t.name === 'stream dump GPU container');
+    assert.equal(dump.status, 'passed');
+    assert.equal(dump.flaky, true);
+});
+
 test('matches report labels to nested workflow job names', () => {
     assert.equal(findJob(jobs, 'Basic (amd64)').id, 1);
     assert.equal(findJob(jobs, 'Plugin (runc, amd64)').id, 2);
     assert.equal(findJob(jobs, 'Basic'), undefined);
 });
 
+test('lists failed jobs without reports, skipping summary siblings and never-started jobs', () => {
+    const { failedJobs } = report();
+    assert.deepEqual(
+        failedJobs.map((j) => [j.name, j.reason]),
+        [
+            ['Kubernetes (GKE, CPU, streamer, storage/s3, amd64)', 'cancelled without a test report'],
+            ['Unit (amd64)', 'failed without a test report'],
+        ]
+    );
+});
+
 test('renders markdown with failures first, links, and the marker', () => {
     const md = renderMarkdown(report());
     assert.ok(md.startsWith('<!-- m -->\n## ❌ Tests'));
-    assert.match(md, /\*\*1 failed\*\* · 6 passed · 1 skipped · 2 suites/);
+    assert.match(md, /\*\*2 failed\*\* · 8 passed · 1 skipped · 1 flaky · 3 suites/);
     assert.match(md, /<summary>❌ <b>Basic \(amd64\)<\/b> · 1 of 6 failed · <a href="https:\/\/gh\/job\/1">logs<\/a><\/summary>/);
     assert.match(md, /\*\*dump\.bats › dump process \(tcp\)\*\* _persistent_/);
     assert.match(md, /connection refused <tcp>/);
-    assert.match(md, /### Failed jobs\n\n- \[Test \/ Unit \(amd64\)\]\(https:\/\/gh\/job\/3\) — failed without a test report/);
+    // Long output keeps the head and the tail.
+    assert.match(md, /`cedana restore job "\$jid"' failed\n.*\n… \(6 lines omitted\) …\nline 11\n/);
+    assert.match(md, /Error: restore failed: controller exited with status 15\n```/);
+    assert.match(md, /### Failed jobs\n\n- \[Kubernetes \(GKE.*\n- \[Unit \(amd64\)\]\(https:\/\/gh\/job\/3\) — failed without a test report/);
+    assert.match(md, /<summary>⚠️ 1 flaky test \(passed on retry\)<\/summary>\n\n- \[CUDA \(13-2, streamer, arm64\)\]\(https:\/\/gh\/job\/6\) › gpu\\_streamer\.bats › stream dump GPU container/);
     assert.match(md, /\| ❌ \[Basic \(amd64\)\]\(https:\/\/gh\/job\/1\) \| 4 \| 1 \| 1 \| 22s \|/);
     assert.match(md, /Run \[#7\]\(https:\/\/gh\/run\/1\) · `main` · \[abcdef1\]/);
 });
 
 test('renders a compact passing summary', () => {
     const r = report();
-    r.groups = r.groups.filter((g) => g.failed === 0);
-    r.totals = { passed: 2, failed: 0, skipped: 0 };
+    r.groups = r.groups.filter((g) => g.label === 'test-report-amd64-runc');
+    r.totals = { passed: 2, failed: 0, skipped: 0, flaky: 0 };
     r.failedJobs = [];
     const md = renderMarkdown(r);
     assert.match(md, /## ✅ Tests\n\n2 passed · 1 suite/);
     assert.doesNotMatch(md, /### Failures/);
+    assert.doesNotMatch(md, /flaky/);
 });
 
 test('renders Slack blocks within limits', () => {
@@ -94,9 +138,11 @@ test('renders Slack blocks within limits', () => {
     assert.equal(blocks[0].type, 'header');
     assert.equal(blocks[0].text.text, ':x: Tests');
     assert.equal(blocks[1].accessory.url, 'https://gh/run/1');
-    assert.match(blocks[1].text.text, /^\*1 failed\* · 6 passed/);
+    assert.match(blocks[1].text.text, /^\*2 failed\* · 8 passed/);
     const failing = blocks.find((b) => b.text?.text.startsWith(':x: *<https://gh/job/1|Basic (amd64)>*'));
     assert.match(failing.text.text, /• dump\.bats › dump process \(tcp\) _persistent_/);
+    const flaky = blocks.find((b) => b.text?.text.startsWith(':warning: *1 flaky test*'));
+    assert.match(flaky.text.text, /• <https:\/\/gh\/job\/6\|CUDA \(13-2, streamer, arm64\)> › gpu_streamer\.bats › stream dump GPU container/);
     const analysis = blocks.find((b) => b.text?.text.startsWith(':robot_face:'));
     assert.match(analysis.text.text, /\*dump\.bats\*.*fails on `connection refused`/);
     assert.equal(blocks.at(-1).type, 'context');
@@ -107,7 +153,7 @@ test('describes failures for analysis', () => {
     const r = report();
     const text = describeFailures(r.groups, r.failedJobs);
     assert.match(text, /^### Basic \(amd64\) › dump\.bats › dump process \(tcp\) \(persistent\)\n\(in test file/m);
-    assert.match(text, /### Job Test \/ Unit \(amd64\): failure, failed without a test report/);
+    assert.match(text, /### Job Unit \(amd64\): failure, failed without a test report/);
 });
 
 test('formats durations', () => {
