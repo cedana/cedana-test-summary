@@ -101188,10 +101188,15 @@ async function paginate(token, endpoint, pick, maxPages = 10) {
     return items;
 }
 
-// All jobs of the current workflow run (latest attempt), including jobs of
-// nested reusable workflows, whose names are prefixed like "Test / GPU / CUDA (...)".
-async function listJobs(token, repository, runId) {
-    return paginate(token, `/repos/${repository}/actions/runs/${runId}/jobs?filter=latest`, (d) => d.jobs);
+// All jobs of the current workflow run attempt, including jobs of nested
+// reusable workflows, whose names are prefixed like "Test / GPU / CUDA (...)".
+// The per-attempt endpoint also lists jobs carried over from earlier attempts,
+// and unlike `jobs?filter=latest` it stays reliable on runs with many attempts.
+async function listJobs(token, repository, runId, attempt = process.env.GITHUB_RUN_ATTEMPT) {
+    const endpoint = attempt
+        ? `/repos/${repository}/actions/runs/${runId}/attempts/${attempt}/jobs`
+        : `/repos/${repository}/actions/runs/${runId}/jobs?filter=latest`;
+    return paginate(token, endpoint, (d) => d.jobs);
 }
 
 // A report label matches the job whose display name is the label itself or
