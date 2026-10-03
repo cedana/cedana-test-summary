@@ -108,16 +108,33 @@ function summaryLine(totals, groups) {
     return parts.join(' · ');
 }
 
-function renderMarkdown({ title, groups, totals, failedJobs, analysis, context, marker }, messageLines = MAX_MESSAGE_LINES) {
+function footerParts(context, timing, { pullRequest = false } = {}) {
+    const parts = [];
+    if (context.runUrl) parts.push({ text: `Run #${context.runNumber}`, url: context.runUrl });
+    if (context.runAttempt > 1) parts.push({ text: `attempt ${context.runAttempt}`, italic: true });
+    if (pullRequest && context.pullRequest) parts.push({ text: `PR #${context.pullRequest.number}`, url: context.pullRequest.url });
+    if (context.branch) parts.push({ text: context.branch, code: true });
+    if (context.sha) parts.push({ text: context.sha.slice(0, 7), url: context.commitUrl });
+    if (timing?.wall) parts.push({ text: `${duration(timing.wall)} wall-clock` });
+    if (timing?.tests) parts.push({ text: `${duration(timing.tests)} of tests` });
+    return parts;
+}
+
+function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
+    const { title, groups, totals, failedJobs, analysis, context, marker, imageUrl, timing } = report;
     const ok = totals.failed === 0 && failedJobs.length === 0;
     const sorted = sortGroups(groups);
     const out = [];
 
     out.push(marker);
-    out.push(`## ${ok ? '✅' : '❌'} ${title}`);
+    out.push(`## ${title}`);
     out.push('');
-    out.push(summaryLine(totals, groups));
+    out.push(`${ok ? '✅' : '❌'} ${summaryLine(totals, groups)}`);
     out.push('');
+    if (imageUrl) {
+        out.push(`![Test matrix](${imageUrl})`);
+        out.push('');
+    }
 
     const failing = sorted.filter((g) => g.failed > 0);
     if (failing.length > 0) {
@@ -200,23 +217,17 @@ function renderMarkdown({ title, groups, totals, failedJobs, analysis, context, 
         out.push('');
     }
 
-    const meta = [];
-    if (context.runUrl) {
-        const attempt = context.runAttempt > 1 ? ` (attempt ${context.runAttempt})` : '';
-        meta.push(`Run ${link(`#${context.runNumber}`, context.runUrl)}${attempt}`);
-    }
-    if (context.branch) meta.push(`\`${context.branch}\``);
-    if (context.sha) meta.push(link(context.sha.slice(0, 7), context.commitUrl));
-    meta.push(new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC');
-    out.push(`<sub>${meta.join(' · ')}</sub>`);
+    const footer = footerParts(context, timing).map((part) => {
+        let text = part.code ? `\`${part.text}\`` : escapeMd(part.text);
+        if (part.italic) text = `_${text}_`;
+        return link(text, part.url);
+    });
+    out.push(`<sub>${footer.join(' · ')}</sub>`);
 
     const markdown = out.join('\n');
     // Shrink failure output until the comment fits GitHub's limit.
     if (markdown.length > MAX_COMMENT_CHARS && messageLines > 0) {
-        return renderMarkdown(
-            { title, groups, totals, failedJobs, analysis, context, marker },
-            messageLines > 5 ? 5 : 0
-        );
+        return renderMarkdown(report, messageLines > 5 ? 5 : 0);
     }
     return markdown;
 }
@@ -225,19 +236,22 @@ function slackLink(text, url) {
     return url ? `<${url}|${text}>` : text;
 }
 
-function renderSlack({ title, groups, totals, failedJobs, analysis, context }) {
+function renderSlack({ title, groups, totals, failedJobs, analysis, context, imageUrl, timing }) {
     const ok = totals.failed === 0 && failedJobs.length === 0;
     const sorted = sortGroups(groups);
     const blocks = [];
 
     blocks.push({
         type: 'header',
-        text: { type: 'plain_text', text: truncate(`${ok ? ':white_check_mark:' : ':x:'} ${title}`, MAX_HEADER_TEXT), emoji: true },
+        text: { type: 'plain_text', text: truncate(title, MAX_HEADER_TEXT), emoji: true },
     });
 
     const summary = {
         type: 'section',
-        text: { type: 'mrkdwn', text: summaryLine(totals, groups).replace(/\*\*/g, '*') },
+        text: {
+            type: 'mrkdwn',
+            text: `${ok ? ':white_check_mark:' : ':x:'} ${summaryLine(totals, groups).replace(/\*\*/g, '*')}`,
+        },
     };
     if (context.runUrl) {
         summary.accessory = {
@@ -248,6 +262,10 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context }) {
         };
     }
     blocks.push(summary);
+
+    if (imageUrl) {
+        blocks.push({ type: 'image', image_url: imageUrl, alt_text: `Test matrix: ${summaryLine(totals, groups).replace(/\*\*/g, '')}` });
+    }
 
     const failing = sorted.filter((g) => g.failed > 0);
     if (failing.length > 0) {
@@ -299,12 +317,12 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context }) {
         });
     }
 
-    const meta = [];
-    if (context.runUrl) meta.push(slackLink(`Run #${context.runNumber}`, context.runUrl));
-    if (context.pullRequest) meta.push(slackLink(`PR #${context.pullRequest.number}`, context.pullRequest.url));
-    if (context.branch) meta.push(`\`${context.branch}\``);
-    if (context.sha) meta.push(slackLink(context.sha.slice(0, 7), context.commitUrl));
-    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: meta.join(' · ') }] });
+    const elements = footerParts(context, timing, { pullRequest: true }).map((part) => {
+        let text = part.code ? `\`${part.text}\`` : part.text;
+        if (part.italic) text = `_${text}_`;
+        return { type: 'mrkdwn', text: slackLink(text, part.url) };
+    });
+    blocks.push({ type: 'context', elements: elements.slice(0, 10) });
 
     return { blocks: blocks.slice(0, MAX_BLOCKS) };
 }

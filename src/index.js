@@ -3,6 +3,8 @@ const glob = require('@actions/glob');
 const { parseReports } = require('./junit');
 const { listJobs, findJob, collectFailedJobs, findPullRequest, upsertComment } = require('./github');
 const { renderMarkdown, renderSlack } = require('./render');
+const { renderMatrixPng } = require('./image');
+const { publishAsset } = require('./assets');
 const { analyze } = require('./ai');
 
 const SERVER_URL = process.env.GITHUB_SERVER_URL || 'https://github.com';
@@ -20,6 +22,8 @@ async function run() {
     const webhookUrl = core.getInput('slack-webhook-url');
     const anthropicApiKey = core.getInput('anthropic-api-key');
     const anthropicModel = core.getInput('anthropic-model') || 'claude-opus-5-5';
+    const imageBranch = core.getInput('image-branch');
+    const imageRetentionDays = Number(core.getInput('image-retention-days') || 30);
     const dryRun = core.getBooleanInput('dry-run');
 
     const files = await (await glob.create(patterns)).glob();
@@ -49,6 +53,39 @@ async function run() {
         totals.flaky += group.flaky;
     }
 
+    // Wall-clock time of the run's test jobs, and the sum of all test durations.
+    const timedJobs = jobs.filter((j) => j.status === 'completed' && j.started_at && j.completed_at && jobsFilter.test(j.name));
+    const timing = { wall: 0, tests: groups.reduce((sum, g) => sum + g.time, 0) };
+    if (timedJobs.length > 0) {
+        const started = Math.min(...timedJobs.map((j) => Date.parse(j.started_at)));
+        const completed = Math.max(...timedJobs.map((j) => Date.parse(j.completed_at)));
+        timing.wall = (completed - started) / 1000;
+    }
+
+    let imageUrl = '';
+    if (imageBranch && groups.length > 0) {
+        try {
+            const png = await renderMatrixPng(groups);
+            const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tests';
+            const file = `${new Date().toISOString().slice(0, 10)}/${RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT || 1}-${slug}.png`;
+            if (dryRun) {
+                core.info(`Dry run; test matrix image (${png.length} bytes) not published as ${file}`);
+            } else {
+                imageUrl = await publishAsset({
+                    token,
+                    repository: REPOSITORY,
+                    branch: imageBranch,
+                    path: file,
+                    content: png,
+                    retentionDays: imageRetentionDays,
+                });
+                core.info(`Published test matrix image to ${imageUrl}`);
+            }
+        } catch (error) {
+            core.warning(`Could not publish test matrix image (needs contents: write): ${error.message}`);
+        }
+    }
+
     let pullRequest = null;
     try {
         pullRequest = await findPullRequest(token, REPOSITORY, SHA);
@@ -76,7 +113,7 @@ async function run() {
     }
 
     const marker = `<!-- cedana-test-summary: ${title} -->`;
-    const report = { title, groups, totals, failedJobs, analysis, context, marker };
+    const report = { title, groups, totals, failedJobs, analysis, context, marker, imageUrl, timing };
     const markdown = renderMarkdown(report);
     const payload = renderSlack(report);
     const conclusion = totals.failed > 0 || failedJobs.length > 0 ? 'failure' : 'success';
@@ -87,6 +124,7 @@ async function run() {
     core.setOutput('skipped', totals.skipped);
     core.setOutput('markdown', markdown);
     core.setOutput('payload', JSON.stringify(payload));
+    core.setOutput('image-url', imageUrl);
     core.info(
         `${title}: ${totals.passed} passed, ${totals.failed} failed, ${totals.skipped} skipped, ${totals.flaky} flaky, ${failedJobs.length} failed job(s)`
     );

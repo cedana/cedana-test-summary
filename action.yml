@@ -43,8 +43,18 @@ inputs:
     description: Claude model used for the failure analysis.
     required: false
     default: claude-opus-5-5
+  image-branch:
+    description: >-
+      Branch of this repository to publish the test matrix image to, created when missing and
+      embedded at the top of the summary. Requires `contents: write`. Disabled when empty.
+    required: false
+    default: ""
+  image-retention-days:
+    description: Days to keep published images before they are pruned from the branch.
+    required: false
+    default: "30"
   dry-run:
-    description: Build the summary without commenting or posting to Slack.
+    description: Build the summary without commenting, publishing the image, or posting to Slack.
     required: false
     default: "false"
 
@@ -61,6 +71,8 @@ outputs:
     description: The summary as GitHub-flavored markdown.
   payload:
     description: The Slack Block Kit payload.
+  image-url:
+    description: URL of the published test matrix image, when enabled.
 
 runs:
   using: node24

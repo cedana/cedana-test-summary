@@ -36016,6 +36016,621 @@ function copyFile(srcFile, destFile, force) {
 
 /***/ }),
 
+/***/ 68462:
+/***/ ((module) => {
+
+"use strict";
+
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// wasm-binding.ts
+var wasm_binding_exports = {};
+__export(wasm_binding_exports, {
+  Resvg: () => Resvg2,
+  initWasm: () => initWasm
+});
+module.exports = __toCommonJS(wasm_binding_exports);
+
+// wasm/dist/index.js
+var wasm;
+var heap = new Array(128).fill(void 0);
+heap.push(void 0, null, true, false);
+var heap_next = heap.length;
+function addHeapObject(obj) {
+  if (heap_next === heap.length)
+    heap.push(heap.length + 1);
+  const idx = heap_next;
+  heap_next = heap[idx];
+  heap[idx] = obj;
+  return idx;
+}
+function getObject(idx) {
+  return heap[idx];
+}
+function dropObject(idx) {
+  if (idx < 132)
+    return;
+  heap[idx] = heap_next;
+  heap_next = idx;
+}
+function takeObject(idx) {
+  const ret = getObject(idx);
+  dropObject(idx);
+  return ret;
+}
+var WASM_VECTOR_LEN = 0;
+var cachedUint8Memory0 = null;
+function getUint8Memory0() {
+  if (cachedUint8Memory0 === null || cachedUint8Memory0.byteLength === 0) {
+    cachedUint8Memory0 = new Uint8Array(wasm.memory.buffer);
+  }
+  return cachedUint8Memory0;
+}
+var cachedTextEncoder = typeof TextEncoder !== "undefined" ? new TextEncoder("utf-8") : { encode: () => {
+  throw Error("TextEncoder not available");
+} };
+var encodeString = typeof cachedTextEncoder.encodeInto === "function" ? function(arg, view) {
+  return cachedTextEncoder.encodeInto(arg, view);
+} : function(arg, view) {
+  const buf = cachedTextEncoder.encode(arg);
+  view.set(buf);
+  return {
+    read: arg.length,
+    written: buf.length
+  };
+};
+function passStringToWasm0(arg, malloc, realloc) {
+  if (realloc === void 0) {
+    const buf = cachedTextEncoder.encode(arg);
+    const ptr2 = malloc(buf.length, 1) >>> 0;
+    getUint8Memory0().subarray(ptr2, ptr2 + buf.length).set(buf);
+    WASM_VECTOR_LEN = buf.length;
+    return ptr2;
+  }
+  let len = arg.length;
+  let ptr = malloc(len, 1) >>> 0;
+  const mem = getUint8Memory0();
+  let offset = 0;
+  for (; offset < len; offset++) {
+    const code = arg.charCodeAt(offset);
+    if (code > 127)
+      break;
+    mem[ptr + offset] = code;
+  }
+  if (offset !== len) {
+    if (offset !== 0) {
+      arg = arg.slice(offset);
+    }
+    ptr = realloc(ptr, len, len = offset + arg.length * 3, 1) >>> 0;
+    const view = getUint8Memory0().subarray(ptr + offset, ptr + len);
+    const ret = encodeString(arg, view);
+    offset += ret.written;
+    ptr = realloc(ptr, len, offset, 1) >>> 0;
+  }
+  WASM_VECTOR_LEN = offset;
+  return ptr;
+}
+function isLikeNone(x) {
+  return x === void 0 || x === null;
+}
+var cachedInt32Memory0 = null;
+function getInt32Memory0() {
+  if (cachedInt32Memory0 === null || cachedInt32Memory0.byteLength === 0) {
+    cachedInt32Memory0 = new Int32Array(wasm.memory.buffer);
+  }
+  return cachedInt32Memory0;
+}
+var cachedTextDecoder = typeof TextDecoder !== "undefined" ? new TextDecoder("utf-8", { ignoreBOM: true, fatal: true }) : { decode: () => {
+  throw Error("TextDecoder not available");
+} };
+if (typeof TextDecoder !== "undefined") {
+  cachedTextDecoder.decode();
+}
+function getStringFromWasm0(ptr, len) {
+  ptr = ptr >>> 0;
+  return cachedTextDecoder.decode(getUint8Memory0().subarray(ptr, ptr + len));
+}
+function _assertClass(instance, klass) {
+  if (!(instance instanceof klass)) {
+    throw new Error(`expected instance of ${klass.name}`);
+  }
+  return instance.ptr;
+}
+function handleError(f, args) {
+  try {
+    return f.apply(this, args);
+  } catch (e) {
+    wasm.__wbindgen_exn_store(addHeapObject(e));
+  }
+}
+var BBoxFinalization = typeof FinalizationRegistry === "undefined" ? { register: () => {
+}, unregister: () => {
+} } : new FinalizationRegistry((ptr) => wasm.__wbg_bbox_free(ptr >>> 0));
+var BBox = class _BBox {
+  static __wrap(ptr) {
+    ptr = ptr >>> 0;
+    const obj = Object.create(_BBox.prototype);
+    obj.__wbg_ptr = ptr;
+    BBoxFinalization.register(obj, obj.__wbg_ptr, obj);
+    return obj;
+  }
+  __destroy_into_raw() {
+    const ptr = this.__wbg_ptr;
+    this.__wbg_ptr = 0;
+    BBoxFinalization.unregister(this);
+    return ptr;
+  }
+  free() {
+    const ptr = this.__destroy_into_raw();
+    wasm.__wbg_bbox_free(ptr);
+  }
+  /**
+  * @returns {number}
+  */
+  get x() {
+    const ret = wasm.__wbg_get_bbox_x(this.__wbg_ptr);
+    return ret;
+  }
+  /**
+  * @param {number} arg0
+  */
+  set x(arg0) {
+    wasm.__wbg_set_bbox_x(this.__wbg_ptr, arg0);
+  }
+  /**
+  * @returns {number}
+  */
+  get y() {
+    const ret = wasm.__wbg_get_bbox_y(this.__wbg_ptr);
+    return ret;
+  }
+  /**
+  * @param {number} arg0
+  */
+  set y(arg0) {
+    wasm.__wbg_set_bbox_y(this.__wbg_ptr, arg0);
+  }
+  /**
+  * @returns {number}
+  */
+  get width() {
+    const ret = wasm.__wbg_get_bbox_width(this.__wbg_ptr);
+    return ret;
+  }
+  /**
+  * @param {number} arg0
+  */
+  set width(arg0) {
+    wasm.__wbg_set_bbox_width(this.__wbg_ptr, arg0);
+  }
+  /**
+  * @returns {number}
+  */
+  get height() {
+    const ret = wasm.__wbg_get_bbox_height(this.__wbg_ptr);
+    return ret;
+  }
+  /**
+  * @param {number} arg0
+  */
+  set height(arg0) {
+    wasm.__wbg_set_bbox_height(this.__wbg_ptr, arg0);
+  }
+};
+var RenderedImageFinalization = typeof FinalizationRegistry === "undefined" ? { register: () => {
+}, unregister: () => {
+} } : new FinalizationRegistry((ptr) => wasm.__wbg_renderedimage_free(ptr >>> 0));
+var RenderedImage = class _RenderedImage {
+  static __wrap(ptr) {
+    ptr = ptr >>> 0;
+    const obj = Object.create(_RenderedImage.prototype);
+    obj.__wbg_ptr = ptr;
+    RenderedImageFinalization.register(obj, obj.__wbg_ptr, obj);
+    return obj;
+  }
+  __destroy_into_raw() {
+    const ptr = this.__wbg_ptr;
+    this.__wbg_ptr = 0;
+    RenderedImageFinalization.unregister(this);
+    return ptr;
+  }
+  free() {
+    const ptr = this.__destroy_into_raw();
+    wasm.__wbg_renderedimage_free(ptr);
+  }
+  /**
+  * Get the PNG width
+  * @returns {number}
+  */
+  get width() {
+    const ret = wasm.renderedimage_width(this.__wbg_ptr);
+    return ret >>> 0;
+  }
+  /**
+  * Get the PNG height
+  * @returns {number}
+  */
+  get height() {
+    const ret = wasm.renderedimage_height(this.__wbg_ptr);
+    return ret >>> 0;
+  }
+  /**
+  * Write the image data to Uint8Array
+  * @returns {Uint8Array}
+  */
+  asPng() {
+    try {
+      const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+      wasm.renderedimage_asPng(retptr, this.__wbg_ptr);
+      var r0 = getInt32Memory0()[retptr / 4 + 0];
+      var r1 = getInt32Memory0()[retptr / 4 + 1];
+      var r2 = getInt32Memory0()[retptr / 4 + 2];
+      if (r2) {
+        throw takeObject(r1);
+      }
+      return takeObject(r0);
+    } finally {
+      wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+  }
+  /**
+  * Get the RGBA pixels of the image
+  * @returns {Uint8Array}
+  */
+  get pixels() {
+    const ret = wasm.renderedimage_pixels(this.__wbg_ptr);
+    return takeObject(ret);
+  }
+};
+var ResvgFinalization = typeof FinalizationRegistry === "undefined" ? { register: () => {
+}, unregister: () => {
+} } : new FinalizationRegistry((ptr) => wasm.__wbg_resvg_free(ptr >>> 0));
+var Resvg = class {
+  __destroy_into_raw() {
+    const ptr = this.__wbg_ptr;
+    this.__wbg_ptr = 0;
+    ResvgFinalization.unregister(this);
+    return ptr;
+  }
+  free() {
+    const ptr = this.__destroy_into_raw();
+    wasm.__wbg_resvg_free(ptr);
+  }
+  /**
+  * @param {Uint8Array | string} svg
+  * @param {string | undefined} [options]
+  * @param {Array<any> | undefined} [custom_font_buffers]
+  */
+  constructor(svg, options, custom_font_buffers) {
+    try {
+      const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+      var ptr0 = isLikeNone(options) ? 0 : passStringToWasm0(options, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+      var len0 = WASM_VECTOR_LEN;
+      wasm.resvg_new(retptr, addHeapObject(svg), ptr0, len0, isLikeNone(custom_font_buffers) ? 0 : addHeapObject(custom_font_buffers));
+      var r0 = getInt32Memory0()[retptr / 4 + 0];
+      var r1 = getInt32Memory0()[retptr / 4 + 1];
+      var r2 = getInt32Memory0()[retptr / 4 + 2];
+      if (r2) {
+        throw takeObject(r1);
+      }
+      this.__wbg_ptr = r0 >>> 0;
+      return this;
+    } finally {
+      wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+  }
+  /**
+  * Get the SVG width
+  * @returns {number}
+  */
+  get width() {
+    const ret = wasm.resvg_width(this.__wbg_ptr);
+    return ret;
+  }
+  /**
+  * Get the SVG height
+  * @returns {number}
+  */
+  get height() {
+    const ret = wasm.resvg_height(this.__wbg_ptr);
+    return ret;
+  }
+  /**
+  * Renders an SVG in Wasm
+  * @returns {RenderedImage}
+  */
+  render() {
+    try {
+      const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+      wasm.resvg_render(retptr, this.__wbg_ptr);
+      var r0 = getInt32Memory0()[retptr / 4 + 0];
+      var r1 = getInt32Memory0()[retptr / 4 + 1];
+      var r2 = getInt32Memory0()[retptr / 4 + 2];
+      if (r2) {
+        throw takeObject(r1);
+      }
+      return RenderedImage.__wrap(r0);
+    } finally {
+      wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+  }
+  /**
+  * Output usvg-simplified SVG string
+  * @returns {string}
+  */
+  toString() {
+    let deferred1_0;
+    let deferred1_1;
+    try {
+      const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+      wasm.resvg_toString(retptr, this.__wbg_ptr);
+      var r0 = getInt32Memory0()[retptr / 4 + 0];
+      var r1 = getInt32Memory0()[retptr / 4 + 1];
+      deferred1_0 = r0;
+      deferred1_1 = r1;
+      return getStringFromWasm0(r0, r1);
+    } finally {
+      wasm.__wbindgen_add_to_stack_pointer(16);
+      wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+    }
+  }
+  /**
+  * Calculate a maximum bounding box of all visible elements in this SVG.
+  *
+  * Note: path bounding box are approx values.
+  * @returns {BBox | undefined}
+  */
+  innerBBox() {
+    const ret = wasm.resvg_innerBBox(this.__wbg_ptr);
+    return ret === 0 ? void 0 : BBox.__wrap(ret);
+  }
+  /**
+  * Calculate a maximum bounding box of all visible elements in this SVG.
+  * This will first apply transform.
+  * Similar to `SVGGraphicsElement.getBBox()` DOM API.
+  * @returns {BBox | undefined}
+  */
+  getBBox() {
+    const ret = wasm.resvg_getBBox(this.__wbg_ptr);
+    return ret === 0 ? void 0 : BBox.__wrap(ret);
+  }
+  /**
+  * Use a given `BBox` to crop the svg. Currently this method simply changes
+  * the viewbox/size of the svg and do not move the elements for simplicity
+  * @param {BBox} bbox
+  */
+  cropByBBox(bbox) {
+    _assertClass(bbox, BBox);
+    wasm.resvg_cropByBBox(this.__wbg_ptr, bbox.__wbg_ptr);
+  }
+  /**
+  * @returns {Array<any>}
+  */
+  imagesToResolve() {
+    try {
+      const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+      wasm.resvg_imagesToResolve(retptr, this.__wbg_ptr);
+      var r0 = getInt32Memory0()[retptr / 4 + 0];
+      var r1 = getInt32Memory0()[retptr / 4 + 1];
+      var r2 = getInt32Memory0()[retptr / 4 + 2];
+      if (r2) {
+        throw takeObject(r1);
+      }
+      return takeObject(r0);
+    } finally {
+      wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+  }
+  /**
+  * @param {string} href
+  * @param {Uint8Array} buffer
+  */
+  resolveImage(href, buffer) {
+    try {
+      const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+      const ptr0 = passStringToWasm0(href, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+      const len0 = WASM_VECTOR_LEN;
+      wasm.resvg_resolveImage(retptr, this.__wbg_ptr, ptr0, len0, addHeapObject(buffer));
+      var r0 = getInt32Memory0()[retptr / 4 + 0];
+      var r1 = getInt32Memory0()[retptr / 4 + 1];
+      if (r1) {
+        throw takeObject(r0);
+      }
+    } finally {
+      wasm.__wbindgen_add_to_stack_pointer(16);
+    }
+  }
+};
+async function __wbg_load(module2, imports) {
+  if (typeof Response === "function" && module2 instanceof Response) {
+    if (typeof WebAssembly.instantiateStreaming === "function") {
+      try {
+        return await WebAssembly.instantiateStreaming(module2, imports);
+      } catch (e) {
+        if (module2.headers.get("Content-Type") != "application/wasm") {
+          console.warn("`WebAssembly.instantiateStreaming` failed because your server does not serve wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n", e);
+        } else {
+          throw e;
+        }
+      }
+    }
+    const bytes = await module2.arrayBuffer();
+    return await WebAssembly.instantiate(bytes, imports);
+  } else {
+    const instance = await WebAssembly.instantiate(module2, imports);
+    if (instance instanceof WebAssembly.Instance) {
+      return { instance, module: module2 };
+    } else {
+      return instance;
+    }
+  }
+}
+function __wbg_get_imports() {
+  const imports = {};
+  imports.wbg = {};
+  imports.wbg.__wbg_new_28c511d9baebfa89 = function(arg0, arg1) {
+    const ret = new Error(getStringFromWasm0(arg0, arg1));
+    return addHeapObject(ret);
+  };
+  imports.wbg.__wbindgen_memory = function() {
+    const ret = wasm.memory;
+    return addHeapObject(ret);
+  };
+  imports.wbg.__wbg_buffer_12d079cc21e14bdb = function(arg0) {
+    const ret = getObject(arg0).buffer;
+    return addHeapObject(ret);
+  };
+  imports.wbg.__wbg_newwithbyteoffsetandlength_aa4a17c33a06e5cb = function(arg0, arg1, arg2) {
+    const ret = new Uint8Array(getObject(arg0), arg1 >>> 0, arg2 >>> 0);
+    return addHeapObject(ret);
+  };
+  imports.wbg.__wbindgen_object_drop_ref = function(arg0) {
+    takeObject(arg0);
+  };
+  imports.wbg.__wbg_new_63b92bc8671ed464 = function(arg0) {
+    const ret = new Uint8Array(getObject(arg0));
+    return addHeapObject(ret);
+  };
+  imports.wbg.__wbg_values_839f3396d5aac002 = function(arg0) {
+    const ret = getObject(arg0).values();
+    return addHeapObject(ret);
+  };
+  imports.wbg.__wbg_next_196c84450b364254 = function() {
+    return handleError(function(arg0) {
+      const ret = getObject(arg0).next();
+      return addHeapObject(ret);
+    }, arguments);
+  };
+  imports.wbg.__wbg_done_298b57d23c0fc80c = function(arg0) {
+    const ret = getObject(arg0).done;
+    return ret;
+  };
+  imports.wbg.__wbg_value_d93c65011f51a456 = function(arg0) {
+    const ret = getObject(arg0).value;
+    return addHeapObject(ret);
+  };
+  imports.wbg.__wbg_instanceof_Uint8Array_2b3bbecd033d19f6 = function(arg0) {
+    let result;
+    try {
+      result = getObject(arg0) instanceof Uint8Array;
+    } catch (_) {
+      result = false;
+    }
+    const ret = result;
+    return ret;
+  };
+  imports.wbg.__wbindgen_string_get = function(arg0, arg1) {
+    const obj = getObject(arg1);
+    const ret = typeof obj === "string" ? obj : void 0;
+    var ptr1 = isLikeNone(ret) ? 0 : passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    var len1 = WASM_VECTOR_LEN;
+    getInt32Memory0()[arg0 / 4 + 1] = len1;
+    getInt32Memory0()[arg0 / 4 + 0] = ptr1;
+  };
+  imports.wbg.__wbg_new_16b304a2cfa7ff4a = function() {
+    const ret = new Array();
+    return addHeapObject(ret);
+  };
+  imports.wbg.__wbindgen_string_new = function(arg0, arg1) {
+    const ret = getStringFromWasm0(arg0, arg1);
+    return addHeapObject(ret);
+  };
+  imports.wbg.__wbg_push_a5b05aedc7234f9f = function(arg0, arg1) {
+    const ret = getObject(arg0).push(getObject(arg1));
+    return ret;
+  };
+  imports.wbg.__wbg_length_c20a40f15020d68a = function(arg0) {
+    const ret = getObject(arg0).length;
+    return ret;
+  };
+  imports.wbg.__wbg_set_a47bac70306a19a7 = function(arg0, arg1, arg2) {
+    getObject(arg0).set(getObject(arg1), arg2 >>> 0);
+  };
+  imports.wbg.__wbindgen_throw = function(arg0, arg1) {
+    throw new Error(getStringFromWasm0(arg0, arg1));
+  };
+  return imports;
+}
+function __wbg_init_memory(imports, maybe_memory) {
+}
+function __wbg_finalize_init(instance, module2) {
+  wasm = instance.exports;
+  __wbg_init.__wbindgen_wasm_module = module2;
+  cachedInt32Memory0 = null;
+  cachedUint8Memory0 = null;
+  return wasm;
+}
+async function __wbg_init(input) {
+  if (wasm !== void 0)
+    return wasm;
+  if (typeof input === "undefined") {
+    input = new URL("index_bg.wasm", void 0);
+  }
+  const imports = __wbg_get_imports();
+  if (typeof input === "string" || typeof Request === "function" && input instanceof Request || typeof URL === "function" && input instanceof URL) {
+    input = fetch(input);
+  }
+  __wbg_init_memory(imports);
+  const { instance, module: module2 } = await __wbg_load(await input, imports);
+  return __wbg_finalize_init(instance, module2);
+}
+var dist_default = __wbg_init;
+
+// wasm-binding.ts
+var initialized = false;
+var initWasm = async (module_or_path) => {
+  if (initialized) {
+    throw new Error("Already initialized. The `initWasm()` function can be used only once.");
+  }
+  await dist_default(await module_or_path);
+  initialized = true;
+};
+var Resvg2 = class extends Resvg {
+  /**
+   * @param {Uint8Array | string} svg
+   * @param {ResvgRenderOptions | undefined} options
+   */
+  constructor(svg, options) {
+    if (!initialized)
+      throw new Error("Wasm has not been initialized. Call `initWasm()` function.");
+    const font = options?.font;
+    if (!!font && isCustomFontsOptions(font)) {
+      const serializableOptions = {
+        ...options,
+        font: {
+          ...font,
+          fontBuffers: void 0
+        }
+      };
+      super(svg, JSON.stringify(serializableOptions), font.fontBuffers);
+    } else {
+      super(svg, JSON.stringify(options));
+    }
+  }
+};
+function isCustomFontsOptions(value) {
+  return Object.prototype.hasOwnProperty.call(value, "fontBuffers");
+}
+
+
+/***/ }),
+
 /***/ 30973:
 /***/ (function(__unused_webpack_module, exports) {
 
@@ -101136,6 +101751,70 @@ module.exports = { analyze, describeFailures };
 
 /***/ }),
 
+/***/ 36203:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const { request } = __nccwpck_require__(96377);
+
+const README = `# Test summary assets
+
+Images generated by [cedana-test-summary](https://github.com/cedana/cedana-test-summary) and embedded
+in test summaries. Files are grouped by date and pruned automatically after the retention period, so
+this branch only ever has one commit.
+`;
+
+// Publish a file to a branch of the repository (created when missing) and
+// return its raw URL. The branch is rewritten as a single root commit on every
+// publish, dropping files whose date directory is older than `retentionDays`,
+// so history (and clone size) stays bounded.
+async function publishAsset({ token, repository, branch, path: filePath, content, retentionDays }) {
+    const base = `/repos/${repository}/git`;
+
+    let existing = [];
+    let refExists = true;
+    try {
+        const ref = await request(token, `${base}/ref/heads/${branch}`);
+        const head = await request(token, `${base}/commits/${ref.object.sha}`);
+        const tree = await request(token, `${base}/trees/${head.tree.sha}?recursive=1`);
+        existing = tree.tree.filter((entry) => entry.type === 'blob');
+    } catch (error) {
+        if (!/failed: 404/.test(error.message)) throw error;
+        refExists = false;
+    }
+
+    const cutoff = new Date(Date.now() - retentionDays * 86400000).toISOString().slice(0, 10);
+    const dated = /^\d{4}-\d{2}-\d{2}\//;
+    const kept = existing.filter(
+        (entry) => entry.path !== filePath && entry.path !== 'README.md' && (!dated.test(entry.path) || entry.path.slice(0, 10) >= cutoff)
+    );
+
+    const blob = async (data) =>
+        (await request(token, `${base}/blobs`, { method: 'POST', body: { content: data.toString('base64'), encoding: 'base64' } })).sha;
+    const entries = [
+        ...kept.map((entry) => ({ path: entry.path, mode: entry.mode, type: 'blob', sha: entry.sha })),
+        { path: filePath, mode: '100644', type: 'blob', sha: await blob(content) },
+        { path: 'README.md', mode: '100644', type: 'blob', sha: await blob(Buffer.from(README)) },
+    ];
+    const tree = await request(token, `${base}/trees`, { method: 'POST', body: { tree: entries } });
+    const commit = await request(token, `${base}/commits`, {
+        method: 'POST',
+        body: { message: `Add ${filePath}`, tree: tree.sha, parents: [] },
+    });
+
+    if (refExists) {
+        await request(token, `${base}/refs/heads/${branch}`, { method: 'PATCH', body: { sha: commit.sha, force: true } });
+    } else {
+        await request(token, `${base}/refs`, { method: 'POST', body: { ref: `refs/heads/${branch}`, sha: commit.sha } });
+    }
+
+    return `https://raw.githubusercontent.com/${repository}/${branch}/${filePath}`;
+}
+
+module.exports = { publishAsset };
+
+
+/***/ }),
+
 /***/ 96377:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -101269,6 +101948,93 @@ async function upsertComment(token, repository, number, marker, body) {
 }
 
 module.exports = { request, listJobs, findJob, collectFailedJobs, findPullRequest, upsertComment };
+
+
+/***/ }),
+
+/***/ 44177:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const fs = __nccwpck_require__(79896);
+const path = __nccwpck_require__(16928);
+const { Resvg, initWasm } = __nccwpck_require__(68462);
+
+// Contribution-graph style matrix: one rounded square per test, laid out row
+// by row in suite order, so failures cluster where their suite is.
+const CELL = 10;
+const GAP = 3;
+const RADIUS = 2;
+const PADDING = 2;
+const MIN_COLS = 12;
+const MAX_COLS = 80;
+const SCALE = 2;
+
+const COLORS = {
+    passed: '#3fb950',
+    failed: '#f85149',
+    flaky: '#d29922',
+    skipped: '#d0d7de',
+};
+
+function cellColor(test) {
+    if (test.status === 'failed') return COLORS.failed;
+    if (test.status === 'skipped') return COLORS.skipped;
+    if (test.flaky) return COLORS.flaky;
+    return COLORS.passed;
+}
+
+function layout(count) {
+    const cols = Math.min(MAX_COLS, Math.max(MIN_COLS, Math.ceil(Math.sqrt(count * 3))));
+    const rows = Math.max(1, Math.ceil(count / cols));
+    return {
+        cols,
+        rows,
+        width: cols * (CELL + GAP) - GAP + PADDING * 2,
+        height: rows * (CELL + GAP) - GAP + PADDING * 2,
+    };
+}
+
+function renderMatrixSvg(groups) {
+    const tests = [];
+    for (const group of [...groups].sort((a, b) => a.label.localeCompare(b.label))) {
+        tests.push(...group.tests);
+    }
+    const { cols, width, height } = layout(tests.length);
+    const rects = tests.map((test, i) => {
+        const x = PADDING + (i % cols) * (CELL + GAP);
+        const y = PADDING + Math.floor(i / cols) * (CELL + GAP);
+        return `<rect x="${x}" y="${y}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${cellColor(test)}"/>`;
+    });
+    return (
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+        rects.join('') +
+        '</svg>'
+    );
+}
+
+let wasmReady = null;
+
+// The build copies the wasm next to the bundle; from source it lives in node_modules.
+function wasmPath() {
+    const bundled = path.join(__dirname, 'index_bg.wasm');
+    if (fs.existsSync(bundled)) return bundled;
+    return __nccwpck_require__.ab + "index_bg.wasm";
+}
+
+async function svgToPng(svg) {
+    if (!wasmReady) {
+        wasmReady = initWasm(fs.readFileSync(wasmPath()));
+    }
+    await wasmReady;
+    const resvg = new Resvg(svg, { fitTo: { mode: 'zoom', value: SCALE } });
+    return Buffer.from(resvg.render().asPng());
+}
+
+async function renderMatrixPng(groups) {
+    return svgToPng(renderMatrixSvg(groups));
+}
+
+module.exports = { renderMatrixSvg, renderMatrixPng, layout, COLORS };
 
 
 /***/ }),
@@ -101539,16 +102305,33 @@ function summaryLine(totals, groups) {
     return parts.join(' · ');
 }
 
-function renderMarkdown({ title, groups, totals, failedJobs, analysis, context, marker }, messageLines = MAX_MESSAGE_LINES) {
+function footerParts(context, timing, { pullRequest = false } = {}) {
+    const parts = [];
+    if (context.runUrl) parts.push({ text: `Run #${context.runNumber}`, url: context.runUrl });
+    if (context.runAttempt > 1) parts.push({ text: `attempt ${context.runAttempt}`, italic: true });
+    if (pullRequest && context.pullRequest) parts.push({ text: `PR #${context.pullRequest.number}`, url: context.pullRequest.url });
+    if (context.branch) parts.push({ text: context.branch, code: true });
+    if (context.sha) parts.push({ text: context.sha.slice(0, 7), url: context.commitUrl });
+    if (timing?.wall) parts.push({ text: `${duration(timing.wall)} wall-clock` });
+    if (timing?.tests) parts.push({ text: `${duration(timing.tests)} of tests` });
+    return parts;
+}
+
+function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
+    const { title, groups, totals, failedJobs, analysis, context, marker, imageUrl, timing } = report;
     const ok = totals.failed === 0 && failedJobs.length === 0;
     const sorted = sortGroups(groups);
     const out = [];
 
     out.push(marker);
-    out.push(`## ${ok ? '✅' : '❌'} ${title}`);
+    out.push(`## ${title}`);
     out.push('');
-    out.push(summaryLine(totals, groups));
+    out.push(`${ok ? '✅' : '❌'} ${summaryLine(totals, groups)}`);
     out.push('');
+    if (imageUrl) {
+        out.push(`![Test matrix](${imageUrl})`);
+        out.push('');
+    }
 
     const failing = sorted.filter((g) => g.failed > 0);
     if (failing.length > 0) {
@@ -101631,23 +102414,17 @@ function renderMarkdown({ title, groups, totals, failedJobs, analysis, context, 
         out.push('');
     }
 
-    const meta = [];
-    if (context.runUrl) {
-        const attempt = context.runAttempt > 1 ? ` (attempt ${context.runAttempt})` : '';
-        meta.push(`Run ${link(`#${context.runNumber}`, context.runUrl)}${attempt}`);
-    }
-    if (context.branch) meta.push(`\`${context.branch}\``);
-    if (context.sha) meta.push(link(context.sha.slice(0, 7), context.commitUrl));
-    meta.push(new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC');
-    out.push(`<sub>${meta.join(' · ')}</sub>`);
+    const footer = footerParts(context, timing).map((part) => {
+        let text = part.code ? `\`${part.text}\`` : escapeMd(part.text);
+        if (part.italic) text = `_${text}_`;
+        return link(text, part.url);
+    });
+    out.push(`<sub>${footer.join(' · ')}</sub>`);
 
     const markdown = out.join('\n');
     // Shrink failure output until the comment fits GitHub's limit.
     if (markdown.length > MAX_COMMENT_CHARS && messageLines > 0) {
-        return renderMarkdown(
-            { title, groups, totals, failedJobs, analysis, context, marker },
-            messageLines > 5 ? 5 : 0
-        );
+        return renderMarkdown(report, messageLines > 5 ? 5 : 0);
     }
     return markdown;
 }
@@ -101656,19 +102433,22 @@ function slackLink(text, url) {
     return url ? `<${url}|${text}>` : text;
 }
 
-function renderSlack({ title, groups, totals, failedJobs, analysis, context }) {
+function renderSlack({ title, groups, totals, failedJobs, analysis, context, imageUrl, timing }) {
     const ok = totals.failed === 0 && failedJobs.length === 0;
     const sorted = sortGroups(groups);
     const blocks = [];
 
     blocks.push({
         type: 'header',
-        text: { type: 'plain_text', text: truncate(`${ok ? ':white_check_mark:' : ':x:'} ${title}`, MAX_HEADER_TEXT), emoji: true },
+        text: { type: 'plain_text', text: truncate(title, MAX_HEADER_TEXT), emoji: true },
     });
 
     const summary = {
         type: 'section',
-        text: { type: 'mrkdwn', text: summaryLine(totals, groups).replace(/\*\*/g, '*') },
+        text: {
+            type: 'mrkdwn',
+            text: `${ok ? ':white_check_mark:' : ':x:'} ${summaryLine(totals, groups).replace(/\*\*/g, '*')}`,
+        },
     };
     if (context.runUrl) {
         summary.accessory = {
@@ -101679,6 +102459,10 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context }) {
         };
     }
     blocks.push(summary);
+
+    if (imageUrl) {
+        blocks.push({ type: 'image', image_url: imageUrl, alt_text: `Test matrix: ${summaryLine(totals, groups).replace(/\*\*/g, '')}` });
+    }
 
     const failing = sorted.filter((g) => g.failed > 0);
     if (failing.length > 0) {
@@ -101730,12 +102514,12 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context }) {
         });
     }
 
-    const meta = [];
-    if (context.runUrl) meta.push(slackLink(`Run #${context.runNumber}`, context.runUrl));
-    if (context.pullRequest) meta.push(slackLink(`PR #${context.pullRequest.number}`, context.pullRequest.url));
-    if (context.branch) meta.push(`\`${context.branch}\``);
-    if (context.sha) meta.push(slackLink(context.sha.slice(0, 7), context.commitUrl));
-    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: meta.join(' · ') }] });
+    const elements = footerParts(context, timing, { pullRequest: true }).map((part) => {
+        let text = part.code ? `\`${part.text}\`` : part.text;
+        if (part.italic) text = `_${text}_`;
+        return { type: 'mrkdwn', text: slackLink(text, part.url) };
+    });
+    blocks.push({ type: 'context', elements: elements.slice(0, 10) });
 
     return { blocks: blocks.slice(0, MAX_BLOCKS) };
 }
@@ -101803,6 +102587,8 @@ const glob = __nccwpck_require__(47206);
 const { parseReports } = __nccwpck_require__(66048);
 const { listJobs, findJob, collectFailedJobs, findPullRequest, upsertComment } = __nccwpck_require__(96377);
 const { renderMarkdown, renderSlack } = __nccwpck_require__(62402);
+const { renderMatrixPng } = __nccwpck_require__(44177);
+const { publishAsset } = __nccwpck_require__(36203);
 const { analyze } = __nccwpck_require__(54992);
 
 const SERVER_URL = process.env.GITHUB_SERVER_URL || 'https://github.com';
@@ -101820,6 +102606,8 @@ async function run() {
     const webhookUrl = core.getInput('slack-webhook-url');
     const anthropicApiKey = core.getInput('anthropic-api-key');
     const anthropicModel = core.getInput('anthropic-model') || 'claude-opus-5-5';
+    const imageBranch = core.getInput('image-branch');
+    const imageRetentionDays = Number(core.getInput('image-retention-days') || 30);
     const dryRun = core.getBooleanInput('dry-run');
 
     const files = await (await glob.create(patterns)).glob();
@@ -101849,6 +102637,39 @@ async function run() {
         totals.flaky += group.flaky;
     }
 
+    // Wall-clock time of the run's test jobs, and the sum of all test durations.
+    const timedJobs = jobs.filter((j) => j.status === 'completed' && j.started_at && j.completed_at && jobsFilter.test(j.name));
+    const timing = { wall: 0, tests: groups.reduce((sum, g) => sum + g.time, 0) };
+    if (timedJobs.length > 0) {
+        const started = Math.min(...timedJobs.map((j) => Date.parse(j.started_at)));
+        const completed = Math.max(...timedJobs.map((j) => Date.parse(j.completed_at)));
+        timing.wall = (completed - started) / 1000;
+    }
+
+    let imageUrl = '';
+    if (imageBranch && groups.length > 0) {
+        try {
+            const png = await renderMatrixPng(groups);
+            const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tests';
+            const file = `${new Date().toISOString().slice(0, 10)}/${RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT || 1}-${slug}.png`;
+            if (dryRun) {
+                core.info(`Dry run; test matrix image (${png.length} bytes) not published as ${file}`);
+            } else {
+                imageUrl = await publishAsset({
+                    token,
+                    repository: REPOSITORY,
+                    branch: imageBranch,
+                    path: file,
+                    content: png,
+                    retentionDays: imageRetentionDays,
+                });
+                core.info(`Published test matrix image to ${imageUrl}`);
+            }
+        } catch (error) {
+            core.warning(`Could not publish test matrix image (needs contents: write): ${error.message}`);
+        }
+    }
+
     let pullRequest = null;
     try {
         pullRequest = await findPullRequest(token, REPOSITORY, SHA);
@@ -101876,7 +102697,7 @@ async function run() {
     }
 
     const marker = `<!-- cedana-test-summary: ${title} -->`;
-    const report = { title, groups, totals, failedJobs, analysis, context, marker };
+    const report = { title, groups, totals, failedJobs, analysis, context, marker, imageUrl, timing };
     const markdown = renderMarkdown(report);
     const payload = renderSlack(report);
     const conclusion = totals.failed > 0 || failedJobs.length > 0 ? 'failure' : 'success';
@@ -101887,6 +102708,7 @@ async function run() {
     core.setOutput('skipped', totals.skipped);
     core.setOutput('markdown', markdown);
     core.setOutput('payload', JSON.stringify(payload));
+    core.setOutput('image-url', imageUrl);
     core.info(
         `${title}: ${totals.passed} passed, ${totals.failed} failed, ${totals.skipped} skipped, ${totals.flaky} flaky, ${failedJobs.length} failed job(s)`
     );

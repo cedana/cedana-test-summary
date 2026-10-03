@@ -5,6 +5,7 @@ const fs = require('fs');
 
 const { parseReports } = require('../src/junit');
 const { renderMarkdown, renderSlack, duration } = require('../src/render');
+const { renderMatrixSvg, renderMatrixPng, layout, COLORS } = require('../src/image');
 const { findJob, collectFailedJobs } = require('../src/github');
 const { describeFailures } = require('../src/ai');
 
@@ -38,8 +39,17 @@ function report() {
         totals.flaky += g.flaky;
     }
     const failedJobs = collectFailedJobs(jobs, groups, /^Test \/ /, 'me');
-    const context = { runUrl: 'https://gh/run/1', runNumber: 7, runAttempt: 1, branch: 'main', sha: 'abcdef1234', commitUrl: 'https://gh/c' };
-    return { title: 'Tests', groups, totals, failedJobs, analysis: '', context, marker: '<!-- m -->' };
+    const context = {
+        runUrl: 'https://gh/run/1',
+        runNumber: 7,
+        runAttempt: 2,
+        branch: 'main',
+        sha: 'abcdef1234',
+        commitUrl: 'https://gh/c',
+        pullRequest: { number: 42, url: 'https://gh/pr/42' },
+    };
+    const timing = { wall: 3725, tests: 14520 };
+    return { title: 'Tests', groups, totals, failedJobs, analysis: '', context, marker: '<!-- m -->', imageUrl: 'https://raw/matrix.png', timing };
 }
 
 test('parses and groups bats JUnit reports by testsuites name', () => {
@@ -106,8 +116,7 @@ test('lists failed jobs without reports, skipping summary siblings and never-sta
 
 test('renders markdown with failures first, links, and the marker', () => {
     const md = renderMarkdown(report());
-    assert.ok(md.startsWith('<!-- m -->\n## ❌ Tests'));
-    assert.match(md, /\*\*2 failed\*\* · 8 passed · 1 skipped · 1 flaky · 3 suites/);
+    assert.ok(md.startsWith('<!-- m -->\n## Tests\n\n❌ **2 failed** · 8 passed · 1 skipped · 1 flaky · 3 suites\n\n![Test matrix](https://raw/matrix.png)\n'));
     assert.match(md, /<summary>❌ <b>Basic \(amd64\)<\/b> · 1 of 6 failed · <a href="https:\/\/gh\/job\/1">logs<\/a><\/summary>/);
     assert.match(md, /\*\*dump\.bats › dump process \(tcp\)\*\* _persistent_/);
     assert.match(md, /connection refused <tcp>/);
@@ -117,7 +126,12 @@ test('renders markdown with failures first, links, and the marker', () => {
     assert.match(md, /### Failed jobs\n\n- \[Kubernetes \(GKE.*\n- \[Unit \(amd64\)\]\(https:\/\/gh\/job\/3\) — failed without a test report/);
     assert.match(md, /<summary>⚠️ 1 flaky test \(passed on retry\)<\/summary>\n\n- \[CUDA \(13-2, streamer, arm64\)\]\(https:\/\/gh\/job\/6\) › gpu\\_streamer\.bats › stream dump GPU container/);
     assert.match(md, /\| ❌ \[Basic \(amd64\)\]\(https:\/\/gh\/job\/1\) \| 4 \| 1 \| 1 \| 22s \|/);
-    assert.match(md, /Run \[#7\]\(https:\/\/gh\/run\/1\) · `main` · \[abcdef1\]/);
+    assert.ok(
+        md.endsWith(
+            '<sub>[Run #7](https://gh/run/1) · _attempt 2_ · `main` · [abcdef1](https://gh/c) · 1h 2m wall-clock · 4h 2m of tests</sub>'
+        ),
+        md.slice(-200)
+    );
 });
 
 test('renders a compact passing summary', () => {
@@ -125,10 +139,14 @@ test('renders a compact passing summary', () => {
     r.groups = r.groups.filter((g) => g.label === 'test-report-amd64-runc');
     r.totals = { passed: 2, failed: 0, skipped: 0, flaky: 0 };
     r.failedJobs = [];
+    r.imageUrl = '';
+    r.timing = { wall: 0, tests: 3 };
+    r.context.runAttempt = 1;
     const md = renderMarkdown(r);
-    assert.match(md, /## ✅ Tests\n\n2 passed · 1 suite/);
+    assert.match(md, /## Tests\n\n✅ 2 passed · 1 suite\n\n<details>/);
     assert.doesNotMatch(md, /### Failures/);
-    assert.doesNotMatch(md, /flaky/);
+    assert.doesNotMatch(md, /flaky|!\[Test matrix\]|attempt|wall-clock/);
+    assert.match(md, /<sub>.* · 3s of tests<\/sub>$/);
 });
 
 test('renders Slack blocks within limits', () => {
@@ -136,17 +154,49 @@ test('renders Slack blocks within limits', () => {
     r.analysis = '- **dump.bats** fails on `connection refused`\n- Unit job crashed';
     const { blocks } = renderSlack(r);
     assert.equal(blocks[0].type, 'header');
-    assert.equal(blocks[0].text.text, ':x: Tests');
+    assert.equal(blocks[0].text.text, 'Tests');
     assert.equal(blocks[1].accessory.url, 'https://gh/run/1');
-    assert.match(blocks[1].text.text, /^\*2 failed\* · 8 passed/);
+    assert.match(blocks[1].text.text, /^:x: \*2 failed\* · 8 passed/);
+    assert.deepEqual(blocks[2], {
+        type: 'image',
+        image_url: 'https://raw/matrix.png',
+        alt_text: 'Test matrix: 2 failed · 8 passed · 1 skipped · 1 flaky · 3 suites',
+    });
     const failing = blocks.find((b) => b.text?.text.startsWith(':x: *<https://gh/job/1|Basic (amd64)>*'));
     assert.match(failing.text.text, /• dump\.bats › dump process \(tcp\) _persistent_/);
     const flaky = blocks.find((b) => b.text?.text.startsWith(':warning: *1 flaky test*'));
     assert.match(flaky.text.text, /• <https:\/\/gh\/job\/6\|CUDA \(13-2, streamer, arm64\)> › gpu_streamer\.bats › stream dump GPU container/);
     const analysis = blocks.find((b) => b.text?.text.startsWith(':robot_face:'));
     assert.match(analysis.text.text, /\*dump\.bats\*.*fails on `connection refused`/);
-    assert.equal(blocks.at(-1).type, 'context');
+    assert.deepEqual(
+        blocks.at(-1).elements.map((e) => e.text),
+        [
+            '<https://gh/run/1|Run #7>',
+            '_attempt 2_',
+            '<https://gh/pr/42|PR #42>',
+            '`main`',
+            '<https://gh/c|abcdef1>',
+            '1h 2m wall-clock',
+            '4h 2m of tests',
+        ]
+    );
     assert.ok(blocks.length <= 50);
+});
+
+test('renders the test matrix as one square per test in suite order', async () => {
+    const r = report();
+    const svg = renderMatrixSvg(r.groups);
+    const rects = svg.match(/<rect /g).length;
+    assert.equal(rects, 11);
+    const fills = [...svg.matchAll(/fill="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
+    // Basic (amd64) comes first: isolated run (4 tests, one skipped) then persistent (1 pass, 1 fail).
+    assert.deepEqual(fills.slice(0, 6), [COLORS.passed, COLORS.passed, COLORS.skipped, COLORS.passed, COLORS.passed, COLORS.failed]);
+    // CUDA: pass, fail, flaky.
+    assert.deepEqual(fills.slice(6, 9), [COLORS.passed, COLORS.failed, COLORS.flaky]);
+    assert.deepEqual(layout(1500), { cols: 68, rows: 23, width: 885, height: 300 });
+
+    const png = await renderMatrixPng(r.groups);
+    assert.deepEqual([...png.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 });
 
 test('describes failures for analysis', () => {

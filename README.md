@@ -2,7 +2,7 @@
 
 GitHub action that turns JUnit XML test reports into one concise summary, posted to the job summary, the pull request (one comment, updated on every run), and Slack ([Block Kit](https://api.slack.com/block-kit)).
 
-The summary leads with what matters: failed tests with their output and a link to the job logs, jobs that failed without producing a report (crashes, timeouts), and optionally a short Claude analysis of the failures. Passing suites are folded into a single table.
+The summary leads with what matters: a test matrix image (one square per test, failures in red), failed tests with their output and a link to the job logs, jobs that failed without producing a report (crashes, timeouts), flaky tests, and optionally a short Claude analysis of the failures. Passing suites are folded into a single table, and the footer carries the run, attempt, branch, commit, and timing.
 
 ## Usage
 
@@ -32,6 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: read
+      contents: write
       pull-requests: write
     steps:
       - uses: actions/download-artifact@v4
@@ -41,6 +42,7 @@ jobs:
       - uses: cedana/cedana-test-summary@v1
         with:
           reports: report/**/*.xml
+          image-branch: test-summary-assets
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 ```
 
@@ -52,9 +54,13 @@ Reports are grouped by the `name` attribute of the `<testsuites>` root element, 
 
 Several report files may share one name (for example an isolated and a persistent run of the same suite); they are aggregated, and the file name distinguishes failures (`report-persistent.xml` → `persistent`).
 
+### Test matrix image
+
+GitHub comments and Slack webhooks can only embed images by public URL, so the matrix is committed to a branch of the repository (`image-branch`, created when missing) and referenced through raw.githubusercontent.com. The branch is rewritten as a single commit on every run and images older than `image-retention-days` are dropped, so it never grows beyond a few weeks of images. This requires a public repository and `contents: write`.
+
 ### Permissions
 
-`actions: read` to list the jobs of the run, `pull-requests: write` to comment. Without `actions: read` the summary is still posted, without job links or failed-job detection.
+`actions: read` to list the jobs of the run, `pull-requests: write` to comment, `contents: write` to publish the image. Without `actions: read` the summary is still posted, without job links or failed-job detection; without `contents: write` it is posted without the image.
 
 ## Inputs
 
@@ -69,6 +75,8 @@ Several report files may share one name (for example an isolated and a persisten
 | `slack-webhook-url` | Slack incoming webhook URL; skipped when empty | — |
 | `anthropic-api-key` | Enables a short Claude analysis of the failures | — |
 | `anthropic-model` | Model used for the analysis | `claude-opus-5-5` |
+| `image-branch` | Branch to publish the test matrix image to; disabled when empty | — |
+| `image-retention-days` | Days to keep published images | `30` |
 | `dry-run` | Build the summary without posting | `false` |
 
 ## Outputs
@@ -79,6 +87,7 @@ Several report files may share one name (for example an isolated and a persisten
 | `passed`, `failed`, `skipped` | Test counts |
 | `markdown` | The summary as GitHub-flavored markdown |
 | `payload` | The Slack Block Kit payload |
+| `image-url` | URL of the published test matrix image, when enabled |
 
 ## Development
 
