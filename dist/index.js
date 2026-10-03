@@ -101143,21 +101143,37 @@ const fs = __nccwpck_require__(79896);
 
 const API_URL = process.env.GITHUB_API_URL || 'https://api.github.com';
 
+const RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// GitHub API request, retried on server errors and network failures.
 async function request(token, endpoint, { method = 'GET', body } = {}) {
-    const response = await fetch(`${API_URL}${endpoint}`, {
-        method,
-        headers: {
-            Accept: 'application/vnd.github+json',
-            Authorization: `Bearer ${token}`,
-            'X-GitHub-Api-Version': '2022-11-28',
-            ...(body ? { 'Content-Type': 'application/json' } : {}),
-        },
-        body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!response.ok) {
-        throw new Error(`${method} ${endpoint} failed: ${response.status} ${await response.text()}`);
+    let lastError;
+    for (let attempt = 1; attempt <= RETRIES; attempt++) {
+        if (attempt > 1) await sleep(RETRY_DELAY_MS * (attempt - 1));
+        let response;
+        try {
+            response = await fetch(`${API_URL}${endpoint}`, {
+                method,
+                headers: {
+                    Accept: 'application/vnd.github+json',
+                    Authorization: `Bearer ${token}`,
+                    'X-GitHub-Api-Version': '2022-11-28',
+                    ...(body ? { 'Content-Type': 'application/json' } : {}),
+                },
+                body: body ? JSON.stringify(body) : undefined,
+            });
+        } catch (error) {
+            lastError = error;
+            continue;
+        }
+        if (response.ok) return response.json();
+        lastError = new Error(`${method} ${endpoint} failed: ${response.status} ${await response.text()}`);
+        if (response.status < 500) break;
     }
-    return response.json();
+    throw lastError;
 }
 
 async function paginate(token, endpoint, pick, maxPages = 10) {
