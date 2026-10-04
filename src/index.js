@@ -24,7 +24,7 @@ async function run() {
     const anthropicModel = core.getInput('anthropic-model') || 'claude-opus-5-5';
     const imageBranch = core.getInput('image-branch');
     const imageRetentionDays = Number(core.getInput('image-retention-days') || 30);
-    const matrix = { sections: core.getInput('matrix-sections'), split: core.getInput('matrix-split') };
+    const matrix = { sections: core.getInput('matrix-sections') };
     const dryRun = core.getBooleanInput('dry-run');
 
     const files = await (await glob.create(patterns)).glob();

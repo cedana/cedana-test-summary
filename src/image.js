@@ -4,7 +4,8 @@ const { Resvg, initWasm } = require('@resvg/resvg-wasm');
 
 // Contribution-graph style matrix: one rounded square per test, laid out row
 // by row in suite order, so failures cluster where their suite is. Optionally
-// divided into labelled bands (sections) and side-by-side columns (split).
+// divided into labelled sections laid out side by side, each as wide as its
+// share of the tests so all sections have the same height.
 const CELL = 10;
 const GAP = 3;
 const STEP = CELL + GAP;
@@ -12,18 +13,14 @@ const RADIUS = 2;
 const PADDING = 2;
 const MIN_COLS = 12;
 const MAX_COLS = 80;
-const MIN_SPLIT_COLS = 8;
-const MAX_SPLIT_COLS = 40;
 const SCALE = 2;
 
 const FONT_FAMILY = 'Inter';
 const FONT_SIZE = 11;
 const FONT_COLOR = '#8b949e';
 const CHAR_WIDTH = FONT_SIZE * 0.58; // rough average advance for Inter
-const LABEL_GAP = 10; // between a band label and its squares
-const HEADER_HEIGHT = 18; // split column labels above the first band
-const BAND_GAP = 14;
-const SPLIT_GAP = 2 * STEP;
+const HEADER_HEIGHT = 18; // section labels above the squares
+const SECTION_GAP = 2 * STEP;
 
 const COLORS = {
     passed: '#3fb950',
@@ -70,12 +67,9 @@ function activeBuckets(buckets, counts) {
     return order.filter((label) => (counts.get(label) || 0) > 0);
 }
 
-function colsFor(count, min, max) {
-    return Math.min(max, Math.max(min, Math.ceil(Math.sqrt(count * 3))));
-}
-
+// Roughly 3:1 grid for `count` squares.
 function layout(count) {
-    const cols = colsFor(count, MIN_COLS, MAX_COLS);
+    const cols = Math.min(MAX_COLS, Math.max(MIN_COLS, Math.ceil(Math.sqrt(count * 3))));
     const rows = Math.max(1, Math.ceil(count / cols));
     return {
         cols,
@@ -85,86 +79,53 @@ function layout(count) {
     };
 }
 
-function renderMatrixSvg(groups, { sections = '', split = '' } = {}) {
-    const sectionBuckets = parseBuckets(sections);
-    const splitBuckets = parseBuckets(split);
+function renderMatrixSvg(groups, { sections = '' } = {}) {
+    const buckets = parseBuckets(sections);
 
-    // cells: section label -> split label -> colors, in suite order.
-    const cells = new Map();
-    const sectionCounts = new Map();
-    const splitCounts = new Map();
+    // section label -> colors, in suite order.
+    const colors = new Map();
     for (const group of [...groups].sort((a, b) => a.label.localeCompare(b.label))) {
-        const section = sectionBuckets.length > 0 ? bucketOf(sectionBuckets, group.label) : '';
-        const column = splitBuckets.length > 0 ? bucketOf(splitBuckets, group.label) : '';
-        if (!cells.has(section)) cells.set(section, new Map());
-        const row = cells.get(section);
-        if (!row.has(column)) row.set(column, []);
-        row.get(column).push(...group.tests.map(cellColor));
-        sectionCounts.set(section, (sectionCounts.get(section) || 0) + group.tests.length);
-        splitCounts.set(column, (splitCounts.get(column) || 0) + group.tests.length);
+        const section = buckets.length > 0 ? bucketOf(buckets, group.label) : '';
+        if (!colors.has(section)) colors.set(section, []);
+        colors.get(section).push(...group.tests.map(cellColor));
+    }
+    const counts = new Map([...colors].map(([section, list]) => [section, list.length]));
+    const active = activeBuckets(buckets, counts);
+    const total = [...counts.values()].reduce((sum, c) => sum + c, 0);
+
+    const rect = (x, y, color) => `<rect x="${x}" y="${y}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${color}"/>`;
+    const text = (x, y, content) =>
+        `<text x="${x}" y="${y}" font-family="${FONT_FAMILY}" font-size="${FONT_SIZE}" fill="${FONT_COLOR}">${escapeXml(content)}</text>`;
+    const svg = (width, height, parts) =>
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join('')}</svg>`;
+
+    // One section (or none configured): a plain grid.
+    if (active.length <= 1) {
+        const all = [...colors.values()].flat();
+        const { cols, width, height } = layout(all.length);
+        return svg(
+            width,
+            height,
+            all.map((color, i) => rect(PADDING + (i % cols) * STEP, PADDING + Math.floor(i / cols) * STEP, color))
+        );
     }
 
-    let bands = activeBuckets(sectionBuckets, sectionCounts);
-    let columns = activeBuckets(splitBuckets, splitCounts);
-    const showSections = bands.length > 1;
-    const showSplit = columns.length > 1;
-    if (!showSections) bands = [...sectionCounts.keys()].filter((s) => sectionCounts.get(s) > 0).slice(0, 1);
-    if (!showSplit) columns = [...splitCounts.keys()].filter((c) => splitCounts.get(c) > 0).slice(0, 1);
-    const colorsAt = (band, column) => {
-        if (showSections && showSplit) return cells.get(band)?.get(column) || [];
-        // Collapsed dimension: merge everything along it, preserving suite order.
-        const out = [];
-        for (const [s, row] of cells) {
-            if (showSections && s !== band) continue;
-            for (const [c, colors] of row) {
-                if (showSplit && c !== column) continue;
-                out.push(...colors);
-            }
-        }
-        return out;
-    };
-
-    let largest = 0;
-    for (const band of bands) for (const column of columns) largest = Math.max(largest, colorsAt(band, column).length);
-    const cols = showSplit ? colsFor(largest, MIN_SPLIT_COLS, MAX_SPLIT_COLS) : colsFor(largest, MIN_COLS, MAX_COLS);
-    const gridWidth = cols * STEP - GAP;
-
-    const gutter = showSections ? Math.ceil(Math.max(...bands.map((b) => b.length)) * CHAR_WIDTH) + LABEL_GAP : 0;
-    const top = showSplit ? HEADER_HEIGHT : 0;
-    const columnX = (i) => PADDING + gutter + i * (gridWidth + SPLIT_GAP);
-    const width = columnX(columns.length - 1) + gridWidth + PADDING;
-
-    const text = (x, y, content, anchor = 'start') =>
-        `<text x="${x}" y="${y}" font-family="${FONT_FAMILY}" font-size="${FONT_SIZE}" fill="${FONT_COLOR}" text-anchor="${anchor}">${escapeXml(content)}</text>`;
-
+    // Sections side by side: shared row count, width proportional to size,
+    // never narrower than the label above it.
+    const { rows } = layout(total);
     const parts = [];
-    if (showSplit) {
-        columns.forEach((column, i) => parts.push(text(columnX(i), PADDING + FONT_SIZE, column)));
+    let x = PADDING;
+    for (const section of active) {
+        const list = colors.get(section);
+        const labelCols = Math.ceil((section.length * CHAR_WIDTH + GAP) / STEP);
+        const cols = Math.max(Math.ceil(list.length / rows), labelCols, 1);
+        parts.push(text(x, PADDING + FONT_SIZE, section));
+        list.forEach((color, i) => parts.push(rect(x + (i % cols) * STEP, PADDING + HEADER_HEIGHT + Math.floor(i / cols) * STEP, color)));
+        x += cols * STEP - GAP + SECTION_GAP;
     }
-
-    let y = PADDING + top;
-    bands.forEach((band, bandIndex) => {
-        if (bandIndex > 0) y += BAND_GAP;
-        let rows = 1;
-        columns.forEach((column, i) => {
-            const colors = colorsAt(band, column);
-            rows = Math.max(rows, Math.ceil(colors.length / cols));
-            colors.forEach((color, k) => {
-                const x = columnX(i) + (k % cols) * STEP;
-                const cy = y + Math.floor(k / cols) * STEP;
-                parts.push(`<rect x="${x}" y="${cy}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${color}"/>`);
-            });
-        });
-        if (showSections) parts.push(text(PADDING + gutter - LABEL_GAP, y + CELL - 1, band, 'end'));
-        y += rows * STEP - GAP;
-    });
-    const height = y + PADDING;
-
-    return (
-        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
-        parts.join('') +
-        '</svg>'
-    );
+    const width = x - SECTION_GAP + PADDING;
+    const height = PADDING + HEADER_HEIGHT + rows * STEP - GAP + PADDING;
+    return svg(width, height, parts);
 }
 
 // The build copies the wasm and font next to the bundle; from source they live elsewhere.
