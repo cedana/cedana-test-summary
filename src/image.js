@@ -17,7 +17,6 @@ const COLORS = {
     failed: '#f85149',
     flaky: '#d29922',
     skipped: '#d0d7de',
-    job: '#a40e26', // a job that failed or was cancelled without test results
 };
 
 function cellColor(test) {
@@ -38,9 +37,8 @@ function layout(count) {
     };
 }
 
-// Failed jobs come first (one square each), then every test in suite order.
-function renderMatrixSvg(groups, failedJobs = []) {
-    const colors = failedJobs.map(() => COLORS.job);
+function renderMatrixSvg(groups) {
+    const colors = [];
     for (const group of [...groups].sort((a, b) => a.label.localeCompare(b.label))) {
         colors.push(...group.tests.map(cellColor));
     }
@@ -75,8 +73,8 @@ async function svgToPng(svg) {
     return Buffer.from(resvg.render().asPng());
 }
 
-async function renderMatrixPng(groups, failedJobs = []) {
-    return svgToPng(renderMatrixSvg(groups, failedJobs));
+async function renderMatrixPng(groups) {
+    return svgToPng(renderMatrixSvg(groups));
 }
 
 module.exports = { renderMatrixSvg, renderMatrixPng, layout, COLORS };

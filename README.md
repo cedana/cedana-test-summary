@@ -2,7 +2,7 @@
 
 GitHub action that turns JUnit XML test reports into one concise summary, posted to the job summary, the pull request (one comment, updated on every run), and Slack ([Block Kit](https://api.slack.com/block-kit)).
 
-The summary leads with what matters: a test matrix image (one square per test and per failed job, failures in red), failed tests with their output and a link to the job logs, jobs that failed without producing a report (crashes, timeouts), flaky tests, and optionally a short Claude analysis of the failures. Passing suites are folded into a single table, and the footer carries the run, attempt, branch, commit, and timing.
+The summary leads with what matters: a test matrix image (one square per test, failures in red), failed tests with their output and a link to the job logs, jobs that failed without producing a report (crashes, timeouts), flaky tests, and optionally a short Claude analysis of the failures. Passing suites are folded into a single table, and the footer carries the run, attempt, branch, commit, and timing.
 
 ## Usage
 

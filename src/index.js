@@ -63,9 +63,9 @@ async function run() {
     }
 
     let imageUrl = '';
-    if (imageBranch && (groups.length > 0 || failedJobs.length > 0)) {
+    if (imageBranch && groups.length > 0) {
         try {
-            const png = await renderMatrixPng(groups, failedJobs);
+            const png = await renderMatrixPng(groups);
             const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tests';
             const file = `${new Date().toISOString().slice(0, 10)}/${RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT || 1}-${slug}.png`;
             if (dryRun) {

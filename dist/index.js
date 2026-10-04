@@ -101974,7 +101974,6 @@ const COLORS = {
     failed: '#f85149',
     flaky: '#d29922',
     skipped: '#d0d7de',
-    job: '#a40e26', // a job that failed or was cancelled without test results
 };
 
 function cellColor(test) {
@@ -101995,9 +101994,8 @@ function layout(count) {
     };
 }
 
-// Failed jobs come first (one square each), then every test in suite order.
-function renderMatrixSvg(groups, failedJobs = []) {
-    const colors = failedJobs.map(() => COLORS.job);
+function renderMatrixSvg(groups) {
+    const colors = [];
     for (const group of [...groups].sort((a, b) => a.label.localeCompare(b.label))) {
         colors.push(...group.tests.map(cellColor));
     }
@@ -102032,8 +102030,8 @@ async function svgToPng(svg) {
     return Buffer.from(resvg.render().asPng());
 }
 
-async function renderMatrixPng(groups, failedJobs = []) {
-    return svgToPng(renderMatrixSvg(groups, failedJobs));
+async function renderMatrixPng(groups) {
+    return svgToPng(renderMatrixSvg(groups));
 }
 
 module.exports = { renderMatrixSvg, renderMatrixPng, layout, COLORS };
@@ -102642,9 +102640,9 @@ async function run() {
     }
 
     let imageUrl = '';
-    if (imageBranch && (groups.length > 0 || failedJobs.length > 0)) {
+    if (imageBranch && groups.length > 0) {
         try {
-            const png = await renderMatrixPng(groups, failedJobs);
+            const png = await renderMatrixPng(groups);
             const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tests';
             const file = `${new Date().toISOString().slice(0, 10)}/${RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT || 1}-${slug}.png`;
             if (dryRun) {

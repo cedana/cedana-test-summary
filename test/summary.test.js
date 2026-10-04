@@ -189,21 +189,19 @@ test('renders Slack blocks within limits', () => {
     assert.ok(blocks.length <= 50);
 });
 
-test('renders the test matrix as one square per failed job and per test in suite order', async () => {
+test('renders the test matrix as one square per test in suite order', async () => {
     const r = report();
-    const svg = renderMatrixSvg(r.groups, r.failedJobs);
+    const svg = renderMatrixSvg(r.groups);
     const rects = svg.match(/<rect /g).length;
-    assert.equal(rects, 2 + 11);
+    assert.equal(rects, 11);
     const fills = [...svg.matchAll(/fill="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
-    // Two failed jobs first.
-    assert.deepEqual(fills.slice(0, 2), [COLORS.job, COLORS.job]);
-    // Then Basic (amd64): isolated run (4 tests, one skipped) then persistent (1 pass, 1 fail).
-    assert.deepEqual(fills.slice(2, 8), [COLORS.passed, COLORS.passed, COLORS.skipped, COLORS.passed, COLORS.passed, COLORS.failed]);
+    // Basic (amd64) comes first: isolated run (4 tests, one skipped) then persistent (1 pass, 1 fail).
+    assert.deepEqual(fills.slice(0, 6), [COLORS.passed, COLORS.passed, COLORS.skipped, COLORS.passed, COLORS.passed, COLORS.failed]);
     // Then CUDA: pass, fail, flaky.
-    assert.deepEqual(fills.slice(8, 11), [COLORS.passed, COLORS.failed, COLORS.flaky]);
+    assert.deepEqual(fills.slice(6, 9), [COLORS.passed, COLORS.failed, COLORS.flaky]);
     assert.deepEqual(layout(1500), { cols: 68, rows: 23, width: 885, height: 300 });
 
-    const png = await renderMatrixPng(r.groups, r.failedJobs);
+    const png = await renderMatrixPng(r.groups);
     assert.deepEqual([...png.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 });
 
