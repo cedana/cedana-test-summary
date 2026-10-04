@@ -93,6 +93,7 @@ function collectFailedJobs(jobs, groups, filter, runnerName = process.env.RUNNER
             name: baseName(job.name),
             html_url: job.html_url,
             conclusion: job.conclusion,
+            missing: !group, // no test results at all from this job
             reason: group ? `tests passed, job ${outcome}` : `${outcome} without a test report`,
         });
     }

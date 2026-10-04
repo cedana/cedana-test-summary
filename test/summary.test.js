@@ -118,7 +118,7 @@ test('renders markdown with failures first, links, and the marker', () => {
     const md = renderMarkdown(report());
     assert.ok(
         md.startsWith(
-            '<!-- m -->\n## Tests\n\n**2 failed** · 8 passed · 1 skipped · 1 flaky · 3 suites · **2 failed jobs**\n\n![Test matrix](https://raw/matrix.png)\n\n### ❌ Failed tests\n'
+            '<!-- m -->\n## Tests\n\n**2 failed** · 8 passed · 1 skipped · 1 flaky · 3 suites · **2 failed jobs**\n\n![Test matrix](https://raw/matrix.png)\n\n> [!WARNING]\n> 2 suites have no results because their jobs failed or were cancelled before reporting. See failed jobs below.\n\n### Failed tests\n'
         ),
         md.slice(0, 200)
     );
@@ -128,10 +128,10 @@ test('renders markdown with failures first, links, and the marker', () => {
     // Long output keeps the head and the tail.
     assert.match(md, /`cedana restore job "\$jid"' failed\n.*\n… \(6 lines omitted\) …\nline 11\n/);
     assert.match(md, /Error: restore failed: controller exited with status 15\n```/);
-    assert.match(md, /### 💥 Failed jobs\n\n- \[Kubernetes \(GKE.*\n- \[Unit \(amd64\)\]\(https:\/\/gh\/job\/3\) — failed without a test report/);
+    assert.match(md, /### Failed jobs\n\n- \[Kubernetes \(GKE.*\n- \[Unit \(amd64\)\]\(https:\/\/gh\/job\/3\) — failed without a test report/);
     assert.match(md, /<summary>1 flaky test \(passed on retry\)<\/summary>\n\n- \[CUDA \(13-2, streamer, arm64\)\]\(https:\/\/gh\/job\/6\) › gpu\\_streamer\.bats › stream dump GPU container/);
     assert.match(md, /\| \[Basic \(amd64\)\]\(https:\/\/gh\/job\/1\) \| 4 \| 1 \| 1 \| 22s \|/);
-    assert.doesNotMatch(md, /[✅⚠️]/);
+    assert.doesNotMatch(md, /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u, 'no emoji anywhere');
     assert.ok(
         md.endsWith(
             '<sub>[Run #7](https://gh/run/1) · _attempt 2_ · `main` · [abcdef1](https://gh/c) · 1h 2m wall-clock · 4h 2m of tests</sub>'
@@ -151,7 +151,7 @@ test('renders a compact passing summary', () => {
     const md = renderMarkdown(r);
     assert.match(md, /## Tests\n\n2 passed · 1 suite\n\n<details>/);
     assert.doesNotMatch(md, /Failed tests|Failed jobs/);
-    assert.doesNotMatch(md, /flaky|!\[Test matrix\]|attempt|wall-clock/);
+    assert.doesNotMatch(md, /flaky|!\[Test matrix\]|attempt|wall-clock|WARNING/);
     assert.match(md, /<sub>.* · 3s of tests<\/sub>$/);
 });
 
@@ -168,7 +168,12 @@ test('renders Slack blocks within limits', () => {
         image_url: 'https://raw/matrix.png',
         alt_text: 'Test matrix: 2 failed · 8 passed · 1 skipped · 1 flaky · 3 suites · 2 failed jobs',
     });
-    const failing = blocks.find((b) => b.text?.text.startsWith(':x: *<https://gh/job/1|Basic (amd64)>*'));
+    assert.equal(
+        blocks[3].text.text,
+        '*Warning:* 2 suites have no results because their jobs failed or were cancelled before reporting. See failed jobs below.'
+    );
+    assert.ok(!JSON.stringify(blocks).match(/:[a-z_]+:/), 'no Slack emoji shortcodes');
+    const failing = blocks.find((b) => b.text?.text.startsWith('*<https://gh/job/1|Basic (amd64)>*'));
     assert.match(failing.text.text, /• dump\.bats › dump process \(tcp\) _persistent_/);
     const flaky = blocks.find((b) => b.text?.text.startsWith('*1 flaky test*'));
     assert.match(flaky.text.text, /• <https:\/\/gh\/job\/6\|CUDA \(13-2, streamer, arm64\)> › gpu_streamer\.bats › stream dump GPU container/);

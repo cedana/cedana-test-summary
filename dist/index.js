@@ -101913,6 +101913,7 @@ function collectFailedJobs(jobs, groups, filter, runnerName = process.env.RUNNER
             name: baseName(job.name),
             html_url: job.html_url,
             conclusion: job.conclusion,
+            missing: !group, // no test results at all from this job
             reason: group ? `tests passed, job ${outcome}` : `${outcome} without a test report`,
         });
     }
@@ -102289,6 +102290,13 @@ function sortGroups(groups) {
     return [...groups].sort((a, b) => b.failed - a.failed || a.label.localeCompare(b.label));
 }
 
+// Suites with no results at all, because their job failed or was cancelled.
+function missingWarning(failedJobs) {
+    const missing = failedJobs.filter((job) => job.missing).length;
+    if (missing === 0) return '';
+    return `${plural(missing, 'suite')} ${missing === 1 ? 'has' : 'have'} no results because ${missing === 1 ? 'its job' : 'their jobs'} failed or ${missing === 1 ? 'was' : 'were'} cancelled before reporting. See failed jobs below.`;
+}
+
 function summaryLine(totals, groups, failedJobs = []) {
     const parts = [];
     if (totals.failed > 0) parts.push(`**${n(totals.failed)} failed**`);
@@ -102326,10 +102334,16 @@ function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
         out.push(`![Test matrix](${imageUrl})`);
         out.push('');
     }
+    const warning = missingWarning(failedJobs);
+    if (warning) {
+        out.push('> [!WARNING]');
+        out.push(`> ${warning}`);
+        out.push('');
+    }
 
     const failing = sorted.filter((g) => g.failed > 0);
     if (failing.length > 0) {
-        out.push('### ❌ Failed tests');
+        out.push('### Failed tests');
         out.push('');
         for (const group of failing) {
             const tests = failedTests(group);
@@ -102361,7 +102375,7 @@ function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
     }
 
     if (failedJobs.length > 0) {
-        out.push('### 💥 Failed jobs');
+        out.push('### Failed jobs');
         out.push('');
         for (const job of failedJobs) {
             out.push(`- ${link(escapeMd(job.name), job.html_url)} — ${job.reason}`);
@@ -102456,15 +102470,17 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context, ima
             alt_text: `Test matrix: ${summaryLine(totals, groups, failedJobs).replace(/\*\*/g, '')}`,
         });
     }
+    const warning = missingWarning(failedJobs);
+    if (warning) {
+        blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*Warning:* ${warning}` } });
+    }
 
     const failing = sorted.filter((g) => g.failed > 0);
     if (failing.length > 0) {
         blocks.push({ type: 'divider' });
         for (const group of failing.slice(0, MAX_SLACK_GROUPS)) {
             const tests = failedTests(group);
-            const lines = [
-                `:x: *${slackLink(group.label, group.job?.html_url)}* · ${n(group.failed)} of ${n(group.total)} failed`,
-            ];
+            const lines = [`*${slackLink(group.label, group.job?.html_url)}* · ${n(group.failed)} of ${n(group.total)} failed`];
             for (const test of tests.slice(0, MAX_SLACK_TESTS_PER_GROUP)) {
                 const { title: t, variant } = testTitle(group, test);
                 lines.push(`• ${t}${variant ? ` _${variant}_` : ''}`);
@@ -102483,7 +102499,7 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context, ima
     }
 
     if (failedJobs.length > 0) {
-        const lines = [':boom: *Failed jobs*'];
+        const lines = ['*Failed jobs*'];
         for (const job of failedJobs) lines.push(`• ${slackLink(job.name, job.html_url)} — ${job.reason}`);
         blocks.push({ type: 'section', text: { type: 'mrkdwn', text: truncate(lines.join('\n'), MAX_SECTION_TEXT) } });
     }
