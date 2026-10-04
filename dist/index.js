@@ -101974,10 +101974,9 @@ const MIN_COLS = 12;
 const MAX_COLS = 80;
 const SCALE = 2;
 
-const BACKGROUND = '#ffffff';
 const FONT_FAMILY = 'Inter';
 const FONT_SIZE = 11;
-const FONT_COLOR = '#24292f';
+const FONT_COLOR = '#ffffff';
 const LETTER_SPACING = 0.6;
 const CHAR_WIDTH = FONT_SIZE * 0.66 + LETTER_SPACING; // rough advance for upper-case Inter
 const HEADER_HEIGHT = 20; // section labels above the squares
@@ -102130,7 +102129,6 @@ function renderMatrixSvg(groups, { sections = '', split = '' } = {}) {
 
     return (
         `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
-        `<rect width="${width}" height="${height}" fill="${BACKGROUND}"/>` +
         parts.join('') +
         '</svg>'
     );

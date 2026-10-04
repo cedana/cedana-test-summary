@@ -235,7 +235,8 @@ test('divides the matrix into sections and bands only when more than one has tes
     svg = renderMatrixSvg([...groups, k8s], { sections, split });
     assert.deepEqual(texts(svg), ['KUBERNETES', 'OTHERS', 'CPU', 'CUDA']);
     assert.equal(squares(svg).length, 13);
-    assert.match(svg, /fill="#24292f"/);
+    assert.match(svg, /fill="#ffffff"/);
+    assert.doesNotMatch(svg, /<rect width=/, 'transparent background');
     const xs = squares(svg).map(([x]) => x);
     assert.ok(Math.min(...xs.slice(2)) > Math.max(...xs.slice(0, 2)), 'Others squares start right of the Kubernetes block');
 
