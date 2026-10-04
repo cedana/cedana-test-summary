@@ -233,7 +233,7 @@ test('divides the matrix into sections and bands only when more than one has tes
     // With a Kubernetes suite present, sections appear on top in upper case, Kubernetes first.
     const k8s = { label: 'Kubernetes (K3s, CPU, default, storage/local, arm64)', tests: [{ status: 'passed' }, { status: 'failed' }] };
     svg = renderMatrixSvg([...groups, k8s], { sections, split });
-    assert.deepEqual(texts(svg), ['KUBERNETES', 'OTHERS', 'CPU', 'CUDA']);
+    assert.deepEqual(texts(svg), ['KUBERNETES', 'OTHER', 'CPU', 'CUDA']);
     assert.equal(squares(svg).length, 13);
     assert.match(svg, /fill="#9da7b3"/);
     assert.doesNotMatch(svg, /<rect width=/, 'transparent background');
@@ -241,7 +241,7 @@ test('divides the matrix into sections and bands only when more than one has tes
     assert.ok(Math.min(...xs.slice(2)) > Math.max(...xs.slice(0, 2)), 'Other squares start right of the Kubernetes block');
 
     // Sections without a split, and a single bucket on both axes.
-    assert.deepEqual(texts(renderMatrixSvg([...groups, k8s], { sections })), ['KUBERNETES', 'OTHERS']);
+    assert.deepEqual(texts(renderMatrixSvg([...groups, k8s], { sections })), ['KUBERNETES', 'OTHER']);
     svg = renderMatrixSvg([k8s], { sections, split });
     assert.deepEqual(texts(svg), []);
     assert.equal(squares(svg).length, 2);
