@@ -99,14 +99,13 @@ function missingWarning(failedJobs) {
     return `${plural(missing, 'suite')} ${missing === 1 ? 'has' : 'have'} no results because ${missing === 1 ? 'its job' : 'their jobs'} failed or ${missing === 1 ? 'was' : 'were'} cancelled before reporting. See failed jobs below.`;
 }
 
-function summaryLine(totals, groups, failedJobs = []) {
+function summaryLine(totals, groups) {
     const parts = [];
     if (totals.failed > 0) parts.push(`**${n(totals.failed)} failed**`);
     parts.push(`${n(totals.passed)} passed`);
     if (totals.skipped > 0) parts.push(`${n(totals.skipped)} skipped`);
     if (totals.flaky > 0) parts.push(`${n(totals.flaky)} flaky`);
     parts.push(plural(groups.length, 'suite'));
-    if (failedJobs.length > 0) parts.push(`**${plural(failedJobs.length, 'failed job')}**`);
     return parts.join(' · ');
 }
 
@@ -130,7 +129,7 @@ function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
     out.push(marker);
     out.push(`## ${title}`);
     out.push('');
-    out.push(summaryLine(totals, groups, failedJobs));
+    out.push(summaryLine(totals, groups));
     out.push('');
     if (imageUrl) {
         out.push(`![Test matrix](${imageUrl})`);
@@ -253,7 +252,7 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context, ima
 
     const summary = {
         type: 'section',
-        text: { type: 'mrkdwn', text: summaryLine(totals, groups, failedJobs).replace(/\*\*/g, '*') },
+        text: { type: 'mrkdwn', text: summaryLine(totals, groups).replace(/\*\*/g, '*') },
     };
     if (context.runUrl) {
         summary.accessory = {
@@ -269,7 +268,7 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context, ima
         blocks.push({
             type: 'image',
             image_url: imageUrl,
-            alt_text: `Test matrix: ${summaryLine(totals, groups, failedJobs).replace(/\*\*/g, '')}`,
+            alt_text: `Test matrix: ${summaryLine(totals, groups).replace(/\*\*/g, '')}`,
         });
     }
     const warning = missingWarning(failedJobs);

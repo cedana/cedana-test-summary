@@ -118,7 +118,7 @@ test('renders markdown with failures first, links, and the marker', () => {
     const md = renderMarkdown(report());
     assert.ok(
         md.startsWith(
-            '<!-- m -->\n## Tests\n\n**2 failed** · 8 passed · 1 skipped · 1 flaky · 3 suites · **2 failed jobs**\n\n![Test matrix](https://raw/matrix.png)\n\n> [!WARNING]\n> 2 suites have no results because their jobs failed or were cancelled before reporting. See failed jobs below.\n\n### Failed tests\n'
+            '<!-- m -->\n## Tests\n\n**2 failed** · 8 passed · 1 skipped · 1 flaky · 3 suites\n\n![Test matrix](https://raw/matrix.png)\n\n> [!WARNING]\n> 2 suites have no results because their jobs failed or were cancelled before reporting. See failed jobs below.\n\n### Failed tests\n'
         ),
         md.slice(0, 200)
     );
@@ -166,7 +166,7 @@ test('renders Slack blocks within limits', () => {
     assert.deepEqual(blocks[2], {
         type: 'image',
         image_url: 'https://raw/matrix.png',
-        alt_text: 'Test matrix: 2 failed · 8 passed · 1 skipped · 1 flaky · 3 suites · 2 failed jobs',
+        alt_text: 'Test matrix: 2 failed · 8 passed · 1 skipped · 1 flaky · 3 suites',
     });
     assert.equal(
         blocks[3].text.text,
