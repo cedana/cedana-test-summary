@@ -4,6 +4,10 @@ GitHub action that turns JUnit XML test reports into one concise summary, posted
 
 The summary leads with what matters: a test matrix image (one square per test, failures in red), failed tests with their output and a link to the job logs, jobs that failed without producing a report (crashes, timeouts), flaky tests, and optionally a short Claude analysis of the failures. Passing suites are folded into a single table, and the footer carries the run, attempt, branch, commit, and timing.
 
+![Test matrix divided into Kubernetes, SLURM and Other sections, each split into CPU and CUDA bands](docs/matrix.png)
+
+*Sample matrix from `scripts/sample-reports.js`: green passed, red failed, amber passed on retry, gray skipped.*
+
 ## Usage
 
 Test jobs upload their JUnit reports as artifacts, and one job at the end downloads them all and posts the summary:
@@ -58,7 +62,11 @@ Several report files may share one name (for example an isolated and a persisten
 
 GitHub comments and Slack webhooks can only embed images by public URL, so the matrix is committed to a branch of the repository (`image-branch`, created when missing) and referenced through raw.githubusercontent.com. The branch is rewritten as a single commit on every run and images older than `image-retention-days` are dropped, so it never grows beyond a few weeks of images. This requires a public repository and `contents: write`.
 
-The matrix can be divided into sections laid out side by side and labelled on top (`matrix-sections`), each as wide as its share of the tests, and every section into bands stacked top to bottom and labelled on the right (`matrix-split`). Both take one bucket per line as `Label=regex`, matched against the suite names in order; a line without a regex collects whatever is left. A division is only drawn when more than one of its buckets has tests, so a run with a single kind of suite still renders as one plain grid.
+Without any division, every test lands in one grid:
+
+![Plain test matrix](docs/matrix-plain.png)
+
+The matrix can be divided into sections laid out side by side and labelled on top (`matrix-sections`), each as wide as its share of the tests, and every section into bands stacked top to bottom and labelled on the right (`matrix-split`), as in the image at the top of this page. Both take one bucket per line as `Label=regex`, matched against the suite names in order; a line without a regex collects whatever is left. A division is only drawn when more than one of its buckets has tests, so a run with a single kind of suite still renders as one plain grid.
 
 ```yaml
           matrix-sections: |
