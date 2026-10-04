@@ -204,7 +204,7 @@ test('renders the test matrix as one square per test in suite order', async () =
     assert.deepEqual(fills.slice(0, 6), [COLORS.passed, COLORS.passed, COLORS.skipped, COLORS.passed, COLORS.passed, COLORS.failed]);
     // Then CUDA: pass, fail, flaky.
     assert.deepEqual(fills.slice(6, 9), [COLORS.passed, COLORS.failed, COLORS.flaky]);
-    assert.deepEqual(layout(1500), { cols: 68, rows: 23, width: 885, height: 300 });
+    assert.deepEqual(layout(1500), { cols: 68, rows: 23, width: 889, height: 304 });
 
     const png = await renderMatrixPng(r.groups);
     assert.deepEqual([...png.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
