@@ -116,7 +116,12 @@ test('lists failed jobs without reports, skipping summary siblings and never-sta
 
 test('renders markdown with failures first, links, and the marker', () => {
     const md = renderMarkdown(report());
-    assert.ok(md.startsWith('<!-- m -->\n## Tests\n\n❌ **2 failed** · 8 passed · 1 skipped · 1 flaky · 3 suites\n\n![Test matrix](https://raw/matrix.png)\n'));
+    assert.ok(
+        md.startsWith(
+            '<!-- m -->\n## Tests\n\n❌ **2 failed** · 8 passed · 1 skipped · 1 flaky · 3 suites · **2 failed jobs**\n\n![Test matrix](https://raw/matrix.png)\n'
+        ),
+        md.slice(0, 200)
+    );
     assert.match(md, /<summary>❌ <b>Basic \(amd64\)<\/b> · 1 of 6 failed · <a href="https:\/\/gh\/job\/1">logs<\/a><\/summary>/);
     assert.match(md, /\*\*dump\.bats › dump process \(tcp\)\*\* _persistent_/);
     assert.match(md, /connection refused <tcp>/);
@@ -160,7 +165,7 @@ test('renders Slack blocks within limits', () => {
     assert.deepEqual(blocks[2], {
         type: 'image',
         image_url: 'https://raw/matrix.png',
-        alt_text: 'Test matrix: 2 failed · 8 passed · 1 skipped · 1 flaky · 3 suites',
+        alt_text: 'Test matrix: 2 failed · 8 passed · 1 skipped · 1 flaky · 3 suites · 2 failed jobs',
     });
     const failing = blocks.find((b) => b.text?.text.startsWith(':x: *<https://gh/job/1|Basic (amd64)>*'));
     assert.match(failing.text.text, /• dump\.bats › dump process \(tcp\) _persistent_/);

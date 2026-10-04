@@ -98,13 +98,14 @@ function sortGroups(groups) {
     return [...groups].sort((a, b) => b.failed - a.failed || a.label.localeCompare(b.label));
 }
 
-function summaryLine(totals, groups) {
+function summaryLine(totals, groups, failedJobs = []) {
     const parts = [];
     if (totals.failed > 0) parts.push(`**${n(totals.failed)} failed**`);
     parts.push(`${n(totals.passed)} passed`);
     if (totals.skipped > 0) parts.push(`${n(totals.skipped)} skipped`);
     if (totals.flaky > 0) parts.push(`${n(totals.flaky)} flaky`);
     parts.push(plural(groups.length, 'suite'));
+    if (failedJobs.length > 0) parts.push(`**${plural(failedJobs.length, 'failed job')}**`);
     return parts.join(' · ');
 }
 
@@ -129,7 +130,7 @@ function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
     out.push(marker);
     out.push(`## ${title}`);
     out.push('');
-    out.push(`${ok ? '✅' : '❌'} ${summaryLine(totals, groups)}`);
+    out.push(`${ok ? '✅' : '❌'} ${summaryLine(totals, groups, failedJobs)}`);
     out.push('');
     if (imageUrl) {
         out.push(`![Test matrix](${imageUrl})`);
@@ -250,7 +251,7 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context, ima
         type: 'section',
         text: {
             type: 'mrkdwn',
-            text: `${ok ? ':white_check_mark:' : ':x:'} ${summaryLine(totals, groups).replace(/\*\*/g, '*')}`,
+            text: `${ok ? ':white_check_mark:' : ':x:'} ${summaryLine(totals, groups, failedJobs).replace(/\*\*/g, '*')}`,
         },
     };
     if (context.runUrl) {
@@ -264,7 +265,11 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context, ima
     blocks.push(summary);
 
     if (imageUrl) {
-        blocks.push({ type: 'image', image_url: imageUrl, alt_text: `Test matrix: ${summaryLine(totals, groups).replace(/\*\*/g, '')}` });
+        blocks.push({
+            type: 'image',
+            image_url: imageUrl,
+            alt_text: `Test matrix: ${summaryLine(totals, groups, failedJobs).replace(/\*\*/g, '')}`,
+        });
     }
 
     const failing = sorted.filter((g) => g.failed > 0);
