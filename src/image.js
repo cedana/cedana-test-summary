@@ -61,7 +61,7 @@ function bucketOf(buckets, label) {
     const match = buckets.find((b) => b.regex && b.regex.test(label));
     if (match) return match.label;
     const rest = buckets.find((b) => !b.regex);
-    return rest ? rest.label : 'Others';
+    return rest ? rest.label : 'Other';
 }
 
 // Buckets that have tests, in spec order (unlisted catch-all last).

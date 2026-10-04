@@ -64,7 +64,7 @@ The matrix can be divided into sections laid out side by side and labelled on to
           matrix-sections: |
             Kubernetes=^Kubernetes
             SLURM=^Slurm
-            Others
+            Other
           matrix-split: |
             CPU
             CUDA=\b(CUDA|GPU)\b

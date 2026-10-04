@@ -34,7 +34,7 @@ jobs:
           matrix-sections: |
             Kubernetes=^Kubernetes
             SLURM=^Slurm
-            Others
+            Other
           matrix-split: |
             CPU
             CUDA=\b(CUDA|GPU)\b

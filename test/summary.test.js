@@ -211,19 +211,19 @@ test('renders the test matrix as one square per test in suite order', async () =
 });
 
 test('divides the matrix into sections and bands only when more than one has tests', async () => {
-    const buckets = parseBuckets('Kubernetes=^Kubernetes\nSLURM=^Slurm\nOthers');
+    const buckets = parseBuckets('Kubernetes=^Kubernetes\nSLURM=^Slurm\nOther');
     assert.equal(bucketOf(buckets, 'Kubernetes (EKS, CPU, default, storage/s3, arm64)'), 'Kubernetes');
     assert.equal(bucketOf(buckets, 'Slurm (Ansible)'), 'SLURM');
-    assert.equal(bucketOf(buckets, 'Basic (amd64)'), 'Others');
-    assert.equal(bucketOf(parseBuckets('K8s=^Kubernetes'), 'Basic (amd64)'), 'Others', 'implicit catch-all');
+    assert.equal(bucketOf(buckets, 'Basic (amd64)'), 'Other');
+    assert.equal(bucketOf(parseBuckets('K8s=^Kubernetes'), 'Basic (amd64)'), 'Other', 'implicit catch-all');
 
-    const sections = 'Kubernetes=^Kubernetes\nSLURM=^Slurm\nOthers';
+    const sections = 'Kubernetes=^Kubernetes\nSLURM=^Slurm\nOther';
     const split = 'CPU\nCUDA=\\b(CUDA|GPU)\\b';
     const groups = parseReports(files);
     const texts = (svg) => [...svg.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
     const squares = (svg) => [...svg.matchAll(/<rect x="(\d+)" y="(\d+)" width="10"/g)].map((m) => [Number(m[1]), Number(m[2])]);
 
-    // Fixtures only have "Others" suites, with both CPU and CUDA: no sections, two bands labelled on the right.
+    // Fixtures only have "Other" suites, with both CPU and CUDA: no sections, two bands labelled on the right.
     let svg = renderMatrixSvg(groups, { sections, split });
     assert.deepEqual(texts(svg), ['CPU', 'CUDA']);
     assert.equal(squares(svg).length, 11);
@@ -238,7 +238,7 @@ test('divides the matrix into sections and bands only when more than one has tes
     assert.match(svg, /fill="#9da7b3"/);
     assert.doesNotMatch(svg, /<rect width=/, 'transparent background');
     const xs = squares(svg).map(([x]) => x);
-    assert.ok(Math.min(...xs.slice(2)) > Math.max(...xs.slice(0, 2)), 'Others squares start right of the Kubernetes block');
+    assert.ok(Math.min(...xs.slice(2)) > Math.max(...xs.slice(0, 2)), 'Other squares start right of the Kubernetes block');
 
     // Sections without a split, and a single bucket on both axes.
     assert.deepEqual(texts(renderMatrixSvg([...groups, k8s], { sections })), ['KUBERNETES', 'OTHERS']);
