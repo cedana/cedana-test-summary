@@ -35,4 +35,7 @@ jobs:
             Kubernetes=^Kubernetes
             SLURM=^Slurm
             Others
+          matrix-split: |
+            CPU
+            CUDA=\b(CUDA|GPU)\b
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL_TEST_ONLY }}

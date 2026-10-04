@@ -55,9 +55,16 @@ inputs:
     default: "30"
   matrix-sections:
     description: >-
-      Divide the matrix into labelled sections laid out side by side, one line per section as
-      `Label=regex` matched against the suite names (first match wins); a line without a regex
-      collects the rest. Shown only when more than one section has tests.
+      Divide the matrix into sections laid out side by side and labelled on top, one line per
+      section as `Label=regex` matched against the suite names (first match wins); a line without a
+      regex collects the rest. Shown only when more than one section has tests.
+    required: false
+    default: ""
+  matrix-split:
+    description: >-
+      Divide every section into bands stacked top to bottom and labelled on the right, one line per
+      band as `Label=regex`; a line without a regex collects the rest. Shown only when more than one
+      band has tests.
     required: false
     default: ""
   dry-run:

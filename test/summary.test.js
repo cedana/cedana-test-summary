@@ -197,9 +197,9 @@ test('renders Slack blocks within limits', () => {
 test('renders the test matrix as one square per test in suite order', async () => {
     const r = report();
     const svg = renderMatrixSvg(r.groups);
-    const rects = svg.match(/<rect /g).length;
+    const rects = svg.match(/<rect x="\d+" y="\d+" width="10"/g).length;
     assert.equal(rects, 11);
-    const fills = [...svg.matchAll(/fill="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
+    const fills = [...svg.matchAll(/width="10" height="10" rx="2" fill="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
     // Basic (amd64) comes first: isolated run (4 tests, one skipped) then persistent (1 pass, 1 fail).
     assert.deepEqual(fills.slice(0, 6), [COLORS.passed, COLORS.passed, COLORS.skipped, COLORS.passed, COLORS.passed, COLORS.failed]);
     // Then CUDA: pass, fail, flaky.
@@ -210,7 +210,7 @@ test('renders the test matrix as one square per test in suite order', async () =
     assert.deepEqual([...png.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 });
 
-test('divides the matrix into side-by-side sections only when more than one has tests', async () => {
+test('divides the matrix into sections and bands only when more than one has tests', async () => {
     const buckets = parseBuckets('Kubernetes=^Kubernetes\nSLURM=^Slurm\nOthers');
     assert.equal(bucketOf(buckets, 'Kubernetes (EKS, CPU, default, storage/s3, arm64)'), 'Kubernetes');
     assert.equal(bucketOf(buckets, 'Slurm (Ansible)'), 'SLURM');
@@ -218,24 +218,34 @@ test('divides the matrix into side-by-side sections only when more than one has 
     assert.equal(bucketOf(parseBuckets('K8s=^Kubernetes'), 'Basic (amd64)'), 'Others', 'implicit catch-all');
 
     const sections = 'Kubernetes=^Kubernetes\nSLURM=^Slurm\nOthers';
+    const split = 'CPU\nCUDA=\\b(CUDA|GPU)\\b';
     const groups = parseReports(files);
     const texts = (svg) => [...svg.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+    const squares = (svg) => [...svg.matchAll(/<rect x="(\d+)" y="(\d+)" width="10"/g)].map((m) => [Number(m[1]), Number(m[2])]);
 
-    // Fixtures only have "Others" suites: plain grid, no labels.
-    let svg = renderMatrixSvg(groups, { sections });
-    assert.deepEqual(texts(svg), []);
-    assert.equal(svg.match(/<rect /g).length, 11);
+    // Fixtures only have "Others" suites, with both CPU and CUDA: no sections, two bands labelled on the right.
+    let svg = renderMatrixSvg(groups, { sections, split });
+    assert.deepEqual(texts(svg), ['CPU', 'CUDA']);
+    assert.equal(squares(svg).length, 11);
+    const labelX = [...svg.matchAll(/<text x="(\d+)"/g)].map((m) => Number(m[1]));
+    assert.ok(labelX.every((x) => x > Math.max(...squares(svg).map(([x]) => x))), 'band labels sit right of the squares');
 
-    // With a Kubernetes suite present, two sections appear with muted labels, Kubernetes first.
+    // With a Kubernetes suite present, sections appear on top in upper case, Kubernetes first.
     const k8s = { label: 'Kubernetes (K3s, CPU, default, storage/local, arm64)', tests: [{ status: 'passed' }, { status: 'failed' }] };
-    svg = renderMatrixSvg([...groups, k8s], { sections });
-    assert.deepEqual(texts(svg), ['Kubernetes', 'Others']);
-    assert.equal(svg.match(/<rect /g).length, 13);
-    assert.match(svg, /fill="#8b949e"/);
-    const xs = [...svg.matchAll(/<rect x="(\d+)"/g)].map((m) => Number(m[1]));
+    svg = renderMatrixSvg([...groups, k8s], { sections, split });
+    assert.deepEqual(texts(svg), ['KUBERNETES', 'OTHERS', 'CPU', 'CUDA']);
+    assert.equal(squares(svg).length, 13);
+    assert.match(svg, /fill="#24292f"/);
+    const xs = squares(svg).map(([x]) => x);
     assert.ok(Math.min(...xs.slice(2)) > Math.max(...xs.slice(0, 2)), 'Others squares start right of the Kubernetes block');
 
-    const png = await renderMatrixPng([...groups, k8s], { sections });
+    // Sections without a split, and a single bucket on both axes.
+    assert.deepEqual(texts(renderMatrixSvg([...groups, k8s], { sections })), ['KUBERNETES', 'OTHERS']);
+    svg = renderMatrixSvg([k8s], { sections, split });
+    assert.deepEqual(texts(svg), []);
+    assert.equal(squares(svg).length, 2);
+
+    const png = await renderMatrixPng([...groups, k8s], { sections, split });
     assert.deepEqual([...png.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 });
 

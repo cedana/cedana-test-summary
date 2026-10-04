@@ -101962,23 +101962,28 @@ const { Resvg, initWasm } = __nccwpck_require__(68462);
 
 // Contribution-graph style matrix: one rounded square per test, laid out row
 // by row in suite order, so failures cluster where their suite is. Optionally
-// divided into labelled sections laid out side by side, each as wide as its
-// share of the tests so all sections have the same height.
+// divided into sections laid out side by side (labelled on top, each as wide
+// as its share of the tests) and into bands stacked within every section
+// (labelled on the right).
 const CELL = 10;
 const GAP = 3;
 const STEP = CELL + GAP;
 const RADIUS = 2;
-const PADDING = 2;
+const PADDING = 4;
 const MIN_COLS = 12;
 const MAX_COLS = 80;
 const SCALE = 2;
 
+const BACKGROUND = '#ffffff';
 const FONT_FAMILY = 'Inter';
 const FONT_SIZE = 11;
-const FONT_COLOR = '#8b949e';
-const CHAR_WIDTH = FONT_SIZE * 0.58; // rough average advance for Inter
-const HEADER_HEIGHT = 18; // section labels above the squares
+const FONT_COLOR = '#24292f';
+const LETTER_SPACING = 0.6;
+const CHAR_WIDTH = FONT_SIZE * 0.66 + LETTER_SPACING; // rough advance for upper-case Inter
+const HEADER_HEIGHT = 20; // section labels above the squares
+const LABEL_GAP = 10; // between the squares and the band labels on the right
 const SECTION_GAP = 2 * STEP;
+const BAND_GAP = STEP;
 
 const COLORS = {
     passed: '#3fb950',
@@ -102037,53 +102042,98 @@ function layout(count) {
     };
 }
 
-function renderMatrixSvg(groups, { sections = '' } = {}) {
-    const buckets = parseBuckets(sections);
+function renderMatrixSvg(groups, { sections = '', split = '' } = {}) {
+    const sectionBuckets = parseBuckets(sections);
+    const splitBuckets = parseBuckets(split);
 
-    // section label -> colors, in suite order.
-    const colors = new Map();
+    // cells: section -> band -> colors, in suite order.
+    const cells = new Map();
+    const sectionCounts = new Map();
+    const splitCounts = new Map();
+    let total = 0;
     for (const group of [...groups].sort((a, b) => a.label.localeCompare(b.label))) {
-        const section = buckets.length > 0 ? bucketOf(buckets, group.label) : '';
-        if (!colors.has(section)) colors.set(section, []);
-        colors.get(section).push(...group.tests.map(cellColor));
+        const section = sectionBuckets.length > 0 ? bucketOf(sectionBuckets, group.label) : '';
+        const band = splitBuckets.length > 0 ? bucketOf(splitBuckets, group.label) : '';
+        if (!cells.has(section)) cells.set(section, new Map());
+        const row = cells.get(section);
+        if (!row.has(band)) row.set(band, []);
+        row.get(band).push(...group.tests.map(cellColor));
+        sectionCounts.set(section, (sectionCounts.get(section) || 0) + group.tests.length);
+        splitCounts.set(band, (splitCounts.get(band) || 0) + group.tests.length);
+        total += group.tests.length;
     }
-    const counts = new Map([...colors].map(([section, list]) => [section, list.length]));
-    const active = activeBuckets(buckets, counts);
-    const total = [...counts.values()].reduce((sum, c) => sum + c, 0);
+
+    const activeSections = activeBuckets(sectionBuckets, sectionCounts);
+    const activeBands = activeBuckets(splitBuckets, splitCounts);
+    const showSections = activeSections.length > 1;
+    const showSplit = activeBands.length > 1;
+    const columns = showSections ? activeSections : [null];
+    const bands = showSplit ? activeBands : [null];
+    // Colors of one cell, merging along a collapsed dimension in suite order.
+    const colorsAt = (section, band) => {
+        const out = [];
+        for (const [s, row] of cells) {
+            if (section !== null && s !== section) continue;
+            for (const [b, colors] of row) {
+                if (band !== null && b !== band) continue;
+                out.push(...colors);
+            }
+        }
+        return out;
+    };
+
+    // Section widths proportional to their share of the tests, never narrower
+    // than the label on top; band heights shared across sections.
+    const { cols: totalCols } = layout(total);
+    const colsOf = columns.map((section) => {
+        if (section === null) return totalCols;
+        const count = bands.reduce((sum, band) => sum + colorsAt(section, band).length, 0);
+        const labelCols = Math.ceil((section.length * CHAR_WIDTH + GAP) / STEP);
+        return Math.max(1, labelCols, Math.ceil((totalCols * count) / total));
+    });
+    const rowsOf = bands.map((band) =>
+        Math.max(1, ...columns.map((section, i) => Math.ceil(colorsAt(section, band).length / colsOf[i])))
+    );
 
     const rect = (x, y, color) => `<rect x="${x}" y="${y}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${color}"/>`;
     const text = (x, y, content) =>
-        `<text x="${x}" y="${y}" font-family="${FONT_FAMILY}" font-size="${FONT_SIZE}" fill="${FONT_COLOR}">${escapeXml(content)}</text>`;
-    const svg = (width, height, parts) =>
-        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join('')}</svg>`;
+        `<text x="${x}" y="${y}" font-family="${FONT_FAMILY}" font-size="${FONT_SIZE}" letter-spacing="${LETTER_SPACING}" fill="${FONT_COLOR}">${escapeXml(content.toUpperCase())}</text>`;
 
-    // One section (or none configured): a plain grid.
-    if (active.length <= 1) {
-        const all = [...colors.values()].flat();
-        const { cols, width, height } = layout(all.length);
-        return svg(
-            width,
-            height,
-            all.map((color, i) => rect(PADDING + (i % cols) * STEP, PADDING + Math.floor(i / cols) * STEP, color))
-        );
-    }
-
-    // Sections side by side: shared row count, width proportional to size,
-    // never narrower than the label above it.
-    const { rows } = layout(total);
     const parts = [];
+    const top = PADDING + (showSections ? HEADER_HEIGHT : 0);
+    const bandY = [];
+    let y = top;
+    bands.forEach((band, b) => {
+        bandY.push(y);
+        y += rowsOf[b] * STEP - GAP + BAND_GAP;
+    });
+    const gridBottom = y - BAND_GAP;
+
     let x = PADDING;
-    for (const section of active) {
-        const list = colors.get(section);
-        const labelCols = Math.ceil((section.length * CHAR_WIDTH + GAP) / STEP);
-        const cols = Math.max(Math.ceil(list.length / rows), labelCols, 1);
-        parts.push(text(x, PADDING + FONT_SIZE, section));
-        list.forEach((color, i) => parts.push(rect(x + (i % cols) * STEP, PADDING + HEADER_HEIGHT + Math.floor(i / cols) * STEP, color)));
-        x += cols * STEP - GAP + SECTION_GAP;
+    columns.forEach((section, i) => {
+        if (section !== null) parts.push(text(x, PADDING + FONT_SIZE, section));
+        bands.forEach((band, b) => {
+            colorsAt(section, band).forEach((color, k) => {
+                parts.push(rect(x + (k % colsOf[i]) * STEP, bandY[b] + Math.floor(k / colsOf[i]) * STEP, color));
+            });
+        });
+        x += colsOf[i] * STEP - GAP + SECTION_GAP;
+    });
+    const gridRight = x - SECTION_GAP;
+
+    let width = gridRight + PADDING;
+    if (showSplit) {
+        bands.forEach((band, b) => parts.push(text(gridRight + LABEL_GAP, bandY[b] + CELL - 1, band)));
+        width = gridRight + LABEL_GAP + Math.ceil(Math.max(...bands.map((band) => band.length)) * CHAR_WIDTH) + PADDING;
     }
-    const width = x - SECTION_GAP + PADDING;
-    const height = PADDING + HEADER_HEIGHT + rows * STEP - GAP + PADDING;
-    return svg(width, height, parts);
+    const height = gridBottom + PADDING;
+
+    return (
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+        `<rect width="${width}" height="${height}" fill="${BACKGROUND}"/>` +
+        parts.join('') +
+        '</svg>'
+    );
 }
 
 // The build copies the wasm and font next to the bundle; from source they live elsewhere.
@@ -102694,7 +102744,7 @@ async function run() {
     const anthropicModel = core.getInput('anthropic-model') || 'claude-opus-5-5';
     const imageBranch = core.getInput('image-branch');
     const imageRetentionDays = Number(core.getInput('image-retention-days') || 30);
-    const matrix = { sections: core.getInput('matrix-sections') };
+    const matrix = { sections: core.getInput('matrix-sections'), split: core.getInput('matrix-split') };
     const dryRun = core.getBooleanInput('dry-run');
 
     const files = await (await glob.create(patterns)).glob();
