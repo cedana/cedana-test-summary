@@ -15,9 +15,9 @@ function describeFailures(groups, failedJobs) {
     let omitted = 0;
     for (const group of groups) {
         for (const test of group.tests.filter((t) => t.status === 'failed')) {
-            const variant = group.multiVariant && test.variant ? ` (${test.variant})` : '';
+            const suite = group.multiVariant && test.variant ? `${test.suite} (${test.variant})` : test.suite;
             const message = test.message.split('\n').slice(0, MAX_MESSAGE_LINES).join('\n');
-            const part = `### ${group.label} › ${test.suite} › ${test.name}${variant}\n${message}\n`;
+            const part = `### ${group.label} › ${suite} › ${test.name}\n${message}\n`;
             if (size + part.length > MAX_INPUT_CHARS) {
                 omitted++;
                 continue;

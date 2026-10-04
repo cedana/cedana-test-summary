@@ -65,9 +65,11 @@ function clipMessage(message, maxLines) {
     return out;
 }
 
+// "dump.bats (persistent) › dump process": the report variant, when a job
+// uploads several report files, is attached to the suite file.
 function testTitle(group, test) {
-    const variant = group.multiVariant && test.variant ? test.variant : '';
-    return { title: `${test.suite} › ${test.name}`, variant };
+    const suite = group.multiVariant && test.variant ? `${test.suite} (${test.variant})` : test.suite;
+    return `${suite} › ${test.name}`;
 }
 
 function failedTests(group) {
@@ -155,8 +157,7 @@ function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
             );
             out.push('');
             for (const test of tests.slice(0, MAX_FAILED_TESTS_PER_GROUP)) {
-                const { title: t, variant } = testTitle(group, test);
-                out.push(`**${escapeMd(t)}**${variant ? ` _${escapeMd(variant)}_` : ''}`);
+                out.push(`**${escapeMd(testTitle(group, test))}**`);
                 const message = clipMessage(test.message, messageLines);
                 if (message) {
                     out.push('');
@@ -190,8 +191,7 @@ function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
         out.push(`<summary>${plural(flaky.length, 'flaky test')} (passed on retry)</summary>`);
         out.push('');
         for (const { group, test } of flaky.slice(0, MAX_FLAKY_TESTS)) {
-            const { title: t, variant } = testTitle(group, test);
-            out.push(`- ${link(escapeMd(group.label), group.job?.html_url)} › ${escapeMd(t)}${variant ? ` _${escapeMd(variant)}_` : ''}`);
+            out.push(`- ${link(escapeMd(group.label), group.job?.html_url)} › ${escapeMd(testTitle(group, test))}`);
         }
         if (flaky.length > MAX_FLAKY_TESTS) out.push(`- _… ${n(flaky.length - MAX_FLAKY_TESTS)} more_`);
         out.push('');
@@ -283,8 +283,7 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context, ima
             const tests = failedTests(group);
             const lines = [`*${slackLink(group.label, group.job?.html_url)}* · ${n(group.failed)} of ${n(group.total)} failed`];
             for (const test of tests.slice(0, MAX_SLACK_TESTS_PER_GROUP)) {
-                const { title: t, variant } = testTitle(group, test);
-                lines.push(`• ${t}${variant ? ` _${variant}_` : ''}`);
+                lines.push(`• ${testTitle(group, test)}`);
             }
             if (tests.length > MAX_SLACK_TESTS_PER_GROUP) {
                 lines.push(`• _… ${n(tests.length - MAX_SLACK_TESTS_PER_GROUP)} more_`);
@@ -309,8 +308,7 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context, ima
     if (flaky.length > 0) {
         const lines = [`*${plural(flaky.length, 'flaky test')}* (passed on retry)`];
         for (const { group, test } of flaky.slice(0, MAX_SLACK_TESTS_PER_GROUP)) {
-            const { title: t, variant } = testTitle(group, test);
-            lines.push(`• ${slackLink(group.label, group.job?.html_url)} › ${t}${variant ? ` _${variant}_` : ''}`);
+            lines.push(`• ${slackLink(group.label, group.job?.html_url)} › ${testTitle(group, test)}`);
         }
         if (flaky.length > MAX_SLACK_TESTS_PER_GROUP) lines.push(`• _… ${n(flaky.length - MAX_SLACK_TESTS_PER_GROUP)} more_`);
         blocks.push({ type: 'section', text: { type: 'mrkdwn', text: truncate(lines.join('\n'), MAX_SECTION_TEXT) } });

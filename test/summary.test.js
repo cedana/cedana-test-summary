@@ -123,7 +123,7 @@ test('renders markdown with failures first, links, and the marker', () => {
         md.slice(0, 200)
     );
     assert.match(md, /<summary><b>Basic \(amd64\)<\/b> · 1 of 6 failed · <a href="https:\/\/gh\/job\/1">logs<\/a><\/summary>/);
-    assert.match(md, /\*\*dump\.bats › dump process \(tcp\)\*\* _persistent_/);
+    assert.match(md, /\*\*dump\.bats \(persistent\) › dump process \(tcp\)\*\*/);
     assert.match(md, /connection refused <tcp>/);
     // Long output keeps the head and the tail.
     assert.match(md, /`cedana restore job "\$jid"' failed\n.*\n… \(6 lines omitted\) …\nline 11\n/);
@@ -174,7 +174,7 @@ test('renders Slack blocks within limits', () => {
     );
     assert.ok(!JSON.stringify(blocks).match(/:[a-z_]+:/), 'no Slack emoji shortcodes');
     const failing = blocks.find((b) => b.text?.text.startsWith('*<https://gh/job/1|Basic (amd64)>*'));
-    assert.match(failing.text.text, /• dump\.bats › dump process \(tcp\) _persistent_/);
+    assert.match(failing.text.text, /• dump\.bats \(persistent\) › dump process \(tcp\)/);
     const flaky = blocks.find((b) => b.text?.text.startsWith('*1 flaky test*'));
     assert.match(flaky.text.text, /• <https:\/\/gh\/job\/6\|CUDA \(13-2, streamer, arm64\)> › gpu_streamer\.bats › stream dump GPU container/);
     const analysis = blocks.find((b) => b.text?.text.startsWith('*Analysis*'));
@@ -253,7 +253,7 @@ test('divides the matrix into sections and bands only when more than one has tes
 test('describes failures for analysis', () => {
     const r = report();
     const text = describeFailures(r.groups, r.failedJobs);
-    assert.match(text, /^### Basic \(amd64\) › dump\.bats › dump process \(tcp\) \(persistent\)\n\(in test file/m);
+    assert.match(text, /^### Basic \(amd64\) › dump\.bats \(persistent\) › dump process \(tcp\)\n\(in test file/m);
     assert.match(text, /### Job Unit \(amd64\): failure, failed without a test report/);
 });
 
