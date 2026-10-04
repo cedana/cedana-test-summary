@@ -106,10 +106,27 @@ test('matches report labels to nested workflow job names', () => {
 test('lists failed jobs without reports, skipping summary siblings and never-started jobs', () => {
     const { failedJobs } = report();
     assert.deepEqual(
-        failedJobs.map((j) => [j.name, j.reason]),
+        failedJobs.map((j) => [j.name, j.reason, j.missing]),
         [
-            ['Kubernetes (GKE, CPU, streamer, storage/s3, amd64)', 'cancelled without a test report'],
-            ['Unit (amd64)', 'failed without a test report'],
+            ['Kubernetes (GKE, CPU, streamer, storage/s3, amd64)', 'cancelled without a test report', true],
+            ['Unit (amd64)', 'failed without a test report', true],
+        ]
+    );
+});
+
+test('distinguishes failed jobs whose tests passed from ones whose report is empty', () => {
+    const passedJob = { id: 10, name: 'Test / Slurm / Slurm (CPU, x)', status: 'completed', conclusion: 'cancelled', html_url: 'https://gh/job/10', steps: [{ status: 'completed', conclusion: 'success' }] };
+    const emptyJob = { id: 11, name: 'Test / Kubernetes / Kubernetes (Nebius, CUDA, default, storage/local, amd64)', status: 'completed', conclusion: 'failure', html_url: 'https://gh/job/11', steps: [{ status: 'completed', conclusion: 'success' }] };
+    const groups = [
+        { label: 'Slurm (CPU, x)', job: passedJob, total: 4, failed: 0 },
+        { label: 'Kubernetes (Nebius, CUDA, default, storage/local, amd64)', job: emptyJob, total: 0, failed: 0 },
+    ];
+    const failedJobs = collectFailedJobs([passedJob, emptyJob], groups, /^Test \/ /, 'me');
+    assert.deepEqual(
+        failedJobs.map((j) => [j.name, j.reason, j.missing]),
+        [
+            ['Kubernetes (Nebius, CUDA, default, storage/local, amd64)', 'no tests ran, job failed', true],
+            ['Slurm (CPU, x)', 'tests passed, job cancelled', false],
         ]
     );
 });
