@@ -101976,7 +101976,7 @@ const SCALE = 2;
 
 const FONT_FAMILY = 'Inter';
 const FONT_SIZE = 11;
-const FONT_COLOR = '#ffffff';
+const FONT_COLOR = '#9da7b3'; // light enough for dark themes, still readable on white
 const LETTER_SPACING = 0.6;
 const CHAR_WIDTH = FONT_SIZE * 0.66 + LETTER_SPACING; // rough advance for upper-case Inter
 const HEADER_HEIGHT = 20; // section labels above the squares
