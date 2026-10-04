@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "test": "node --test",
-    "build": "ncc build src/index.js -o dist --license licenses.txt && cp node_modules/@resvg/resvg-wasm/index_bg.wasm dist/"
+    "build": "ncc build src/index.js -o dist --license licenses.txt && cp node_modules/@resvg/resvg-wasm/index_bg.wasm assets/Inter-Regular.ttf dist/"
   },
   "repository": {
     "type": "git",

@@ -53,6 +53,19 @@ inputs:
     description: Days to keep published images before they are pruned from the branch.
     required: false
     default: "30"
+  matrix-sections:
+    description: >-
+      Divide the matrix into labelled bands, one line per band as `Label=regex` matched against the
+      suite names (first match wins); a line without a regex collects the rest. Shown only when more
+      than one band has tests.
+    required: false
+    default: ""
+  matrix-split:
+    description: >-
+      Split each band side by side, one line per column as `Label=regex` matched against the suite
+      names; a line without a regex collects the rest. Shown only when more than one column has tests.
+    required: false
+    default: ""
   dry-run:
     description: Build the summary without commenting, publishing the image, or posting to Slack.
     required: false

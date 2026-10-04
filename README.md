@@ -58,6 +58,20 @@ Several report files may share one name (for example an isolated and a persisten
 
 GitHub comments and Slack webhooks can only embed images by public URL, so the matrix is committed to a branch of the repository (`image-branch`, created when missing) and referenced through raw.githubusercontent.com. The branch is rewritten as a single commit on every run and images older than `image-retention-days` are dropped, so it never grows beyond a few weeks of images. This requires a public repository and `contents: write`.
 
+The matrix can be divided into labelled bands (`matrix-sections`) and side-by-side columns (`matrix-split`). Both take one bucket per line as `Label=regex`, matched against the suite names in order; a line without a regex collects whatever is left. A division is only drawn when more than one of its buckets has tests, so a run with a single kind of suite still renders as one plain grid.
+
+```yaml
+          matrix-sections: |
+            Kubernetes=^Kubernetes
+            SLURM=^Slurm
+            Others
+          matrix-split: |
+            CPU
+            CUDA=\b(CUDA|GPU)\b
+```
+
+Labels use the bundled [Inter](https://rsms.me/inter/) font (SIL Open Font License, see `assets/`).
+
 ### Permissions
 
 `actions: read` to list the jobs of the run, `pull-requests: write` to comment, `contents: write` to publish the image. Without `actions: read` the summary is still posted, without job links or failed-job detection; without `contents: write` it is posted without the image.
@@ -77,6 +91,8 @@ GitHub comments and Slack webhooks can only embed images by public URL, so the m
 | `anthropic-model` | Model used for the analysis | `claude-opus-5-5` |
 | `image-branch` | Branch to publish the test matrix image to; disabled when empty | — |
 | `image-retention-days` | Days to keep published images | `30` |
+| `matrix-sections` | Bands of the matrix, one `Label=regex` per line | — |
+| `matrix-split` | Side-by-side columns of each band, one `Label=regex` per line | — |
 | `dry-run` | Build the summary without posting | `false` |
 
 ## Outputs

@@ -5,7 +5,7 @@ const fs = require('fs');
 
 const { parseReports } = require('../src/junit');
 const { renderMarkdown, renderSlack, duration } = require('../src/render');
-const { renderMatrixSvg, renderMatrixPng, layout, COLORS } = require('../src/image');
+const { renderMatrixSvg, renderMatrixPng, layout, parseBuckets, bucketOf, COLORS } = require('../src/image');
 const { findJob, collectFailedJobs } = require('../src/github');
 const { describeFailures } = require('../src/ai');
 
@@ -207,6 +207,39 @@ test('renders the test matrix as one square per test in suite order', async () =
     assert.deepEqual(layout(1500), { cols: 68, rows: 23, width: 885, height: 300 });
 
     const png = await renderMatrixPng(r.groups);
+    assert.deepEqual([...png.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+});
+
+test('divides the matrix into labelled sections and split columns only when more than one has tests', async () => {
+    const buckets = parseBuckets('Kubernetes=^Kubernetes\nSLURM=^Slurm\nOthers');
+    assert.equal(bucketOf(buckets, 'Kubernetes (EKS, CPU, default, storage/s3, arm64)'), 'Kubernetes');
+    assert.equal(bucketOf(buckets, 'Slurm (Ansible)'), 'SLURM');
+    assert.equal(bucketOf(buckets, 'Basic (amd64)'), 'Others');
+    assert.equal(bucketOf(parseBuckets('K8s=^Kubernetes'), 'Basic (amd64)'), 'Others', 'implicit catch-all');
+
+    const split = 'CPU\nCUDA=\\b(CUDA|GPU)\\b';
+    const sections = 'Kubernetes=^Kubernetes\nSLURM=^Slurm\nOthers';
+    const groups = parseReports(files);
+    const texts = (svg) => [...svg.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+
+    // Fixtures only have "Others" suites, so no section bands, but both CPU and CUDA columns.
+    let svg = renderMatrixSvg(groups, { sections, split });
+    assert.deepEqual(texts(svg), ['CPU', 'CUDA']);
+    assert.equal(svg.match(/<rect /g).length, 11);
+    assert.match(svg, /fill="#8b949e"/);
+
+    // With a Kubernetes suite present, bands appear with muted labels.
+    const k8s = { label: 'Kubernetes (K3s, CPU, default, storage/local, arm64)', tests: [{ status: 'passed' }, { status: 'failed' }] };
+    svg = renderMatrixSvg([...groups, k8s], { sections, split });
+    assert.deepEqual(texts(svg), ['CPU', 'CUDA', 'Kubernetes', 'Others']);
+    assert.equal(svg.match(/<rect /g).length, 13);
+
+    // A single bucket on both axes renders the plain grid.
+    svg = renderMatrixSvg([k8s], { sections, split });
+    assert.deepEqual(texts(svg), []);
+    assert.equal(svg.match(/<rect /g).length, 2);
+
+    const png = await renderMatrixPng([...groups, k8s], { sections, split });
     assert.deepEqual([...png.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 });
 

@@ -24,6 +24,7 @@ async function run() {
     const anthropicModel = core.getInput('anthropic-model') || 'claude-opus-5-5';
     const imageBranch = core.getInput('image-branch');
     const imageRetentionDays = Number(core.getInput('image-retention-days') || 30);
+    const matrix = { sections: core.getInput('matrix-sections'), split: core.getInput('matrix-split') };
     const dryRun = core.getBooleanInput('dry-run');
 
     const files = await (await glob.create(patterns)).glob();
@@ -65,7 +66,7 @@ async function run() {
     let imageUrl = '';
     if (imageBranch && groups.length > 0) {
         try {
-            const png = await renderMatrixPng(groups);
+            const png = await renderMatrixPng(groups, matrix);
             const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tests';
             const file = `${new Date().toISOString().slice(0, 10)}/${RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT || 1}-${slug}.png`;
             if (dryRun) {
