@@ -17,6 +17,7 @@ const COLORS = {
     failed: '#f85149',
     flaky: '#d29922',
     skipped: '#d0d7de',
+    job: '#a40e26', // a job that failed or was cancelled without test results
 };
 
 function cellColor(test) {
@@ -37,16 +38,17 @@ function layout(count) {
     };
 }
 
-function renderMatrixSvg(groups) {
-    const tests = [];
+// Failed jobs come first (one square each), then every test in suite order.
+function renderMatrixSvg(groups, failedJobs = []) {
+    const colors = failedJobs.map(() => COLORS.job);
     for (const group of [...groups].sort((a, b) => a.label.localeCompare(b.label))) {
-        tests.push(...group.tests);
+        colors.push(...group.tests.map(cellColor));
     }
-    const { cols, width, height } = layout(tests.length);
-    const rects = tests.map((test, i) => {
+    const { cols, width, height } = layout(colors.length);
+    const rects = colors.map((color, i) => {
         const x = PADDING + (i % cols) * (CELL + GAP);
         const y = PADDING + Math.floor(i / cols) * (CELL + GAP);
-        return `<rect x="${x}" y="${y}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${cellColor(test)}"/>`;
+        return `<rect x="${x}" y="${y}" width="${CELL}" height="${CELL}" rx="${RADIUS}" fill="${color}"/>`;
     });
     return (
         `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
@@ -73,8 +75,8 @@ async function svgToPng(svg) {
     return Buffer.from(resvg.render().asPng());
 }
 
-async function renderMatrixPng(groups) {
-    return svgToPng(renderMatrixSvg(groups));
+async function renderMatrixPng(groups, failedJobs = []) {
+    return svgToPng(renderMatrixSvg(groups, failedJobs));
 }
 
 module.exports = { renderMatrixSvg, renderMatrixPng, layout, COLORS };

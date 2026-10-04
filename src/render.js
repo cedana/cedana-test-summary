@@ -84,12 +84,6 @@ function flakyTests(groups) {
     return flaky;
 }
 
-function icon(group) {
-    if (group.failed > 0) return '❌';
-    if (group.job && group.job.conclusion !== 'success') return '⚠️';
-    return '✅';
-}
-
 function link(text, url) {
     return url ? `[${text}](${url})` : text;
 }
@@ -123,14 +117,13 @@ function footerParts(context, timing, { pullRequest = false } = {}) {
 
 function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
     const { title, groups, totals, failedJobs, analysis, context, marker, imageUrl, timing } = report;
-    const ok = totals.failed === 0 && failedJobs.length === 0;
     const sorted = sortGroups(groups);
     const out = [];
 
     out.push(marker);
     out.push(`## ${title}`);
     out.push('');
-    out.push(`${ok ? '✅' : '❌'} ${summaryLine(totals, groups, failedJobs)}`);
+    out.push(summaryLine(totals, groups, failedJobs));
     out.push('');
     if (imageUrl) {
         out.push(`![Test matrix](${imageUrl})`);
@@ -139,14 +132,14 @@ function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
 
     const failing = sorted.filter((g) => g.failed > 0);
     if (failing.length > 0) {
-        out.push('### Failures');
+        out.push('### ❌ Failed tests');
         out.push('');
         for (const group of failing) {
             const tests = failedTests(group);
             const logs = group.job?.html_url ? ` · <a href="${group.job.html_url}">logs</a>` : '';
             out.push('<details open>');
             out.push(
-                `<summary>❌ <b>${escapeHtml(group.label)}</b> · ${n(group.failed)} of ${n(group.total)} failed${logs}</summary>`
+                `<summary><b>${escapeHtml(group.label)}</b> · ${n(group.failed)} of ${n(group.total)} failed${logs}</summary>`
             );
             out.push('');
             for (const test of tests.slice(0, MAX_FAILED_TESTS_PER_GROUP)) {
@@ -171,7 +164,7 @@ function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
     }
 
     if (failedJobs.length > 0) {
-        out.push('### Failed jobs');
+        out.push('### 💥 Failed jobs');
         out.push('');
         for (const job of failedJobs) {
             out.push(`- ${link(escapeMd(job.name), job.html_url)} — ${job.reason}`);
@@ -182,7 +175,7 @@ function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
     const flaky = flakyTests(sorted);
     if (flaky.length > 0) {
         out.push('<details>');
-        out.push(`<summary>⚠️ ${plural(flaky.length, 'flaky test')} (passed on retry)</summary>`);
+        out.push(`<summary>${plural(flaky.length, 'flaky test')} (passed on retry)</summary>`);
         out.push('');
         for (const { group, test } of flaky.slice(0, MAX_FLAKY_TESTS)) {
             const { title: t, variant } = testTitle(group, test);
@@ -209,9 +202,8 @@ function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
         out.push('|---|--:|--:|--:|--:|');
         for (const group of sorted) {
             const name = link(escapeMd(group.label), group.job?.html_url);
-            out.push(
-                `| ${icon(group)} ${name} | ${n(group.passed)} | ${n(group.failed)} | ${n(group.skipped)} | ${duration(group.time)} |`
-            );
+            const note = group.failed === 0 && group.job && group.job.conclusion !== 'success' ? ` (job ${group.job.conclusion})` : '';
+            out.push(`| ${name}${note} | ${n(group.passed)} | ${n(group.failed)} | ${n(group.skipped)} | ${duration(group.time)} |`);
         }
         out.push('');
         out.push('</details>');
@@ -238,7 +230,6 @@ function slackLink(text, url) {
 }
 
 function renderSlack({ title, groups, totals, failedJobs, analysis, context, imageUrl, timing }) {
-    const ok = totals.failed === 0 && failedJobs.length === 0;
     const sorted = sortGroups(groups);
     const blocks = [];
 
@@ -249,10 +240,7 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context, ima
 
     const summary = {
         type: 'section',
-        text: {
-            type: 'mrkdwn',
-            text: `${ok ? ':white_check_mark:' : ':x:'} ${summaryLine(totals, groups, failedJobs).replace(/\*\*/g, '*')}`,
-        },
+        text: { type: 'mrkdwn', text: summaryLine(totals, groups, failedJobs).replace(/\*\*/g, '*') },
     };
     if (context.runUrl) {
         summary.accessory = {
@@ -305,7 +293,7 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context, ima
 
     const flaky = flakyTests(sorted);
     if (flaky.length > 0) {
-        const lines = [`:warning: *${plural(flaky.length, 'flaky test')}* (passed on retry)`];
+        const lines = [`*${plural(flaky.length, 'flaky test')}* (passed on retry)`];
         for (const { group, test } of flaky.slice(0, MAX_SLACK_TESTS_PER_GROUP)) {
             const { title: t, variant } = testTitle(group, test);
             lines.push(`• ${slackLink(group.label, group.job?.html_url)} › ${t}${variant ? ` _${variant}_` : ''}`);
@@ -318,7 +306,7 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context, ima
         blocks.push({ type: 'divider' });
         blocks.push({
             type: 'section',
-            text: { type: 'mrkdwn', text: truncate(`:robot_face: *Analysis*\n${slackifyMarkdown(analysis).trim()}`, MAX_SECTION_TEXT) },
+            text: { type: 'mrkdwn', text: truncate(`*Analysis*\n${slackifyMarkdown(analysis).trim()}`, MAX_SECTION_TEXT) },
         });
     }
 
