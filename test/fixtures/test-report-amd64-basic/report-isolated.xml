@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Basic (amd64)" time="12.5">
+<testsuite name="test/regression/dump.bats" tests="3" failures="0" errors="0" skipped="1" time="8.5" timestamp="2026-10-03T22:49:06" hostname="runner">
+    <testcase classname="test/regression/dump.bats" name="dump process" time="4.0" />
+    <testcase classname="test/regression/dump.bats" name="dump process (tcp)" time="4.5" />
+    <testcase classname="test/regression/dump.bats" name="dump process (gpu)" time="0">
+        <skipped>no gpu</skipped>
+    </testcase>
+</testsuite>
+<testsuite name="test/regression/restore.bats" tests="1" failures="0" errors="0" skipped="0" time="4.0" timestamp="2026-10-03T22:49:06" hostname="runner">
+    <testcase classname="test/regression/restore.bats" name="restore process" time="4.0" />
+</testsuite>
+</testsuites>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Basic (amd64)" time="9">
+<testsuite name="test/regression/dump.bats" tests="2" failures="1" errors="0" skipped="0" time="9" timestamp="2026-10-03T22:49:06" hostname="runner">
+    <testcase classname="test/regression/dump.bats" name="dump process" time="4.0" />
+    <testcase classname="test/regression/dump.bats" name="dump process (tcp)" time="5.0">
+        <failure type="failure">(in test file test/regression/dump.bats, line 42)
+  `[ &quot;$status&quot; -eq 0 ]&#39; failed
+Error: failed to dump: connection refused &lt;tcp&gt;</failure>
+    </testcase>
+</testsuite>
+</testsuites>

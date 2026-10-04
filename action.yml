@@ -1,0 +1,93 @@
+name: Cedana Test Summary
+description: Summarize JUnit test results to the job summary, the pull request, and Slack, with links to the failing jobs
+author: Cedana
+
+branding:
+  icon: check-square
+  color: green
+
+inputs:
+  reports:
+    description: Glob patterns (one per line) matching the JUnit XML reports to summarize.
+    required: false
+    default: "**/*.xml"
+  title:
+    description: Title of the summary. Also identifies the pull request comment to update.
+    required: false
+    default: Tests
+  github-token:
+    description: GitHub token used to list workflow jobs and comment on the pull request.
+    required: false
+    default: ${{ github.token }}
+  jobs-filter:
+    description: >-
+      Regular expression matched against workflow job names. Only matching jobs are reported
+      when they fail without producing a test report. Defaults to every job in the run.
+    required: false
+    default: ""
+  step-summary:
+    description: Write the summary to the GitHub step summary.
+    required: false
+    default: "true"
+  pr-comment:
+    description: Post the summary as a comment on the pull request, updating it on later runs.
+    required: false
+    default: "true"
+  slack-webhook-url:
+    description: Slack incoming webhook URL to post the summary to. Skipped when empty.
+    required: false
+  anthropic-api-key:
+    description: Anthropic API key. When set, failures are analyzed by Claude and a short analysis is added.
+    required: false
+  anthropic-model:
+    description: Claude model used for the failure analysis.
+    required: false
+    default: claude-opus-5-5
+  image-branch:
+    description: >-
+      Branch of this repository to publish the test matrix image to, created when missing and
+      embedded at the top of the summary. Requires `contents: write`. Disabled when empty.
+    required: false
+    default: ""
+  image-retention-days:
+    description: Days to keep published images before they are pruned from the branch.
+    required: false
+    default: "30"
+  matrix-sections:
+    description: >-
+      Divide the matrix into sections laid out side by side and labelled on top, one line per
+      section as `Label=regex` matched against the suite names (first match wins); a line without a
+      regex collects the rest. Shown only when more than one section has tests.
+    required: false
+    default: ""
+  matrix-split:
+    description: >-
+      Divide every section into bands stacked top to bottom and labelled on the right, one line per
+      band as `Label=regex`; a line without a regex collects the rest. Shown only when more than one
+      band has tests.
+    required: false
+    default: ""
+  dry-run:
+    description: Build the summary without commenting, publishing the image, or posting to Slack.
+    required: false
+    default: "false"
+
+outputs:
+  conclusion:
+    description: "`success` when every test passed and no job failed, otherwise `failure`."
+  passed:
+    description: Number of passed tests.
+  failed:
+    description: Number of failed tests.
+  skipped:
+    description: Number of skipped tests.
+  markdown:
+    description: The summary as GitHub-flavored markdown.
+  payload:
+    description: The Slack Block Kit payload.
+  image-url:
+    description: URL of the published test matrix image, when enabled.
+
+runs:
+  using: node24
+  main: dist/index.js

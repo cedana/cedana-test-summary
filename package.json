@@ -1,0 +1,28 @@
+{
+  "name": "cedana-test-summary",
+  "version": "1.0.0",
+  "description": "GitHub action that summarizes JUnit test results to the job summary, the pull request, and Slack",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "node --test",
+    "build": "ncc build src/index.js -o dist --license licenses.txt && cp node_modules/@resvg/resvg-wasm/index_bg.wasm assets/Inter-Regular.ttf dist/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cedana/cedana-test-summary.git"
+  },
+  "license": "Apache-2.0",
+  "type": "commonjs",
+  "private": true,
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/glob": "^0.5.1",
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@resvg/resvg-wasm": "^2.6.2",
+    "fast-xml-parser": "^5.11.2",
+    "slackify-markdown": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.45.0"
+  }
+}
