@@ -101908,13 +101908,15 @@ function collectFailedJobs(jobs, groups, filter, runnerName = process.env.RUNNER
         const group = reported.get(job.id);
         if (group && group.failed > 0) continue;
         const outcome = job.conclusion === 'failure' ? 'failed' : job.conclusion.replace('_', ' ');
+        // A report with no test cases (bats aborted before running anything) counts as missing results.
+        const ran = group && group.total > 0;
         failed.push({
             id: job.id,
             name: baseName(job.name),
             html_url: job.html_url,
             conclusion: job.conclusion,
-            missing: !group, // no test results at all from this job
-            reason: group ? `tests passed, job ${outcome}` : `${outcome} without a test report`,
+            missing: !ran,
+            reason: ran ? `tests passed, job ${outcome}` : group ? `no tests ran, job ${outcome}` : `${outcome} without a test report`,
         });
     }
     return failed.sort((a, b) => a.name.localeCompare(b.name));
