@@ -59,9 +59,12 @@ async function listJobs(token, repository, runId, attempt = process.env.GITHUB_R
 }
 
 // A report label matches the job whose display name is the label itself or
-// ends with it (reusable workflows prefix the caller's job name).
-function findJob(jobs, label) {
-    return jobs.find((job) => job.name === label || job.name.endsWith(` / ${label}`));
+// ends with it (reusable workflows prefix the caller's job name). Jobs matching
+// `filter` win over others, since unrelated workflows in the same run can use
+// the same job names (e.g. "Download / Plugin (runc, amd64)" vs "Test / Plugin (runc, amd64)").
+function findJob(jobs, label, filter = /.*/) {
+    const matches = jobs.filter((job) => job.name === label || job.name.endsWith(` / ${label}`));
+    return matches.find((job) => filter.test(job.name)) || matches[0];
 }
 
 // Jobs that failed in a way the summary should surface: no test report was

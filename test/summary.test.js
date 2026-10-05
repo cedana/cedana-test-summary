@@ -30,7 +30,7 @@ const jobs = [
 
 function report() {
     const groups = parseReports(files);
-    for (const group of groups) group.job = findJob(jobs, group.label) || null;
+    for (const group of groups) group.job = findJob(jobs, group.label, /^Test \/ /) || null;
     const totals = { passed: 0, failed: 0, skipped: 0, flaky: 0 };
     for (const g of groups) {
         totals.passed += g.passed;
@@ -97,10 +97,14 @@ test('collapses retried tests and flags the ones that recovered as flaky', () =>
     assert.equal(dump.flaky, true);
 });
 
-test('matches report labels to nested workflow job names', () => {
+test('matches report labels to nested workflow job names, preferring the jobs filter', () => {
     assert.equal(findJob(jobs, 'Basic (amd64)').id, 1);
     assert.equal(findJob(jobs, 'Plugin (runc, amd64)').id, 2);
     assert.equal(findJob(jobs, 'Basic'), undefined);
+    // Another workflow in the run reuses the job name.
+    const download = { id: 20, name: 'Download / Plugin (runc, amd64)', status: 'completed', conclusion: 'success' };
+    assert.equal(findJob([download, ...jobs], 'Plugin (runc, amd64)', /^Test \/ /).id, 2);
+    assert.equal(findJob([download, ...jobs], 'Plugin (runc, amd64)').id, 20, 'first match without a filter');
 });
 
 test('lists failed jobs without reports, skipping summary siblings and never-started jobs', () => {
