@@ -91,7 +91,7 @@ Labels use the bundled [Inter](https://rsms.me/inter/) font (SIL Open Font Licen
 | `reports` | Glob patterns (one per line) for the JUnit XML reports | `**/*.xml` |
 | `title` | Summary title; also identifies the pull request comment to update | `Tests` |
 | `github-token` | Token used to list jobs and comment | `github.token` |
-| `jobs-filter` | Regex on job names; only matching jobs are reported when they fail without a report | every job |
+| `jobs-filter` | Regex on job names; only matching jobs are reported when they fail without a report, and they win when several jobs share a suite's name | every job |
 | `step-summary` | Write to the GitHub step summary | `true` |
 | `pr-comment` | Post or update the pull request comment | `true` |
 | `slack-webhook-url` | Slack incoming webhook URL; skipped when empty | — |

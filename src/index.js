@@ -40,7 +40,7 @@ async function run() {
         }
     }
     for (const group of groups) {
-        group.job = findJob(jobs, group.label) || null;
+        group.job = findJob(jobs, group.label, jobsFilter) || null;
         if (!group.job) core.info(`No workflow job matches report "${group.label}"`);
     }
     const failedJobs = collectFailedJobs(jobs, groups, jobsFilter);
