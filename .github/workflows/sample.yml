@@ -31,6 +31,8 @@ jobs:
           reports: report/**/*.xml
           pr-comment: false
           image-branch: test-summary-assets
+          image-repository: cedana/summaries
+          image-token: ${{ secrets.GIT_CI_PAT }}
           matrix-sections: |
             Kubernetes=^Kubernetes
             SLURM=^Slurm
@@ -41,14 +43,13 @@ jobs:
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL_TEST_ONLY }}
 
       # The release summary picks up the test matrix from the artifact uploaded above.
-      - name: Release summary (dry run)
+      - name: Post release summary
         id: release-summary
-        uses: cedana/cedana-publish-summary@feature/ced-2480-include-the-test-matrix-in-release-summaries
+        uses: cedana/cedana-publish-summary@v1
         with:
           title: cedana-test-summary (sample)
-          slack-webhook-url: unused
           step-summary: false
-          dry-run: true
+          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL_TEST_ONLY }}
 
       - name: Check the release summary embeds the test matrix
         env:
