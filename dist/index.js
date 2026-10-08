@@ -102745,6 +102745,8 @@ async function run() {
     const anthropicApiKey = core.getInput('anthropic-api-key');
     const anthropicModel = core.getInput('anthropic-model') || 'claude-opus-5-5';
     const imageBranch = core.getInput('image-branch');
+    const imageRepository = core.getInput('image-repository') || REPOSITORY;
+    const imageToken = core.getInput('image-token') || token;
     const imageRetentionDays = Number(core.getInput('image-retention-days') || 30);
     const matrix = { sections: core.getInput('matrix-sections'), split: core.getInput('matrix-split') };
     const dryRun = core.getBooleanInput('dry-run');
@@ -102795,8 +102797,8 @@ async function run() {
                 core.info(`Dry run; test matrix image (${png.length} bytes) not published as ${file}`);
             } else {
                 imageUrl = await publishAsset({
-                    token,
-                    repository: REPOSITORY,
+                    token: imageToken,
+                    repository: imageRepository,
                     branch: imageBranch,
                     path: file,
                     content: png,

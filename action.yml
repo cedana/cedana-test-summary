@@ -45,8 +45,20 @@ inputs:
     default: claude-opus-5-5
   image-branch:
     description: >-
-      Branch of this repository to publish the test matrix image to, created when missing and
-      embedded at the top of the summary. Requires `contents: write`. Disabled when empty.
+      Branch to publish the test matrix image to, created when missing and embedded at the top of
+      the summary. Requires `contents: write` on the repository. Disabled when empty.
+    required: false
+    default: ""
+  image-repository:
+    description: >-
+      Repository (`owner/name`) to publish the test matrix image to. Must be public for the image to
+      render; set it when this workflow runs in a private repository. Defaults to this repository.
+    required: false
+    default: ""
+  image-token:
+    description: >-
+      Token used to publish the test matrix image, with `contents: write` on `image-repository`.
+      Defaults to `github-token`.
     required: false
     default: ""
   image-retention-days:

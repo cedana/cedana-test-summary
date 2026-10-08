@@ -62,6 +62,14 @@ Several report files may share one name (for example an isolated and a persisten
 
 GitHub comments and Slack webhooks can only embed images by public URL, so the matrix is committed to a branch of the repository (`image-branch`, created when missing) and referenced through raw.githubusercontent.com. The branch is rewritten as a single commit on every run and images older than `image-retention-days` are dropped, so it never grows beyond a few weeks of images. This requires a public repository and `contents: write`.
 
+A private repository can publish its images to a public one instead, with a token that has `contents: write` there:
+
+```yaml
+          image-branch: test-summary-assets
+          image-repository: cedana/cedana
+          image-token: ${{ secrets.GIT_CI_PAT }}
+```
+
 Without any division, every test lands in one grid:
 
 ![Plain test matrix](docs/matrix-plain.png)
@@ -98,6 +106,8 @@ Labels use the bundled [Inter](https://rsms.me/inter/) font (SIL Open Font Licen
 | `anthropic-api-key` | Enables a short Claude analysis of the failures | — |
 | `anthropic-model` | Model used for the analysis | `claude-opus-5-5` |
 | `image-branch` | Branch to publish the test matrix image to; disabled when empty | — |
+| `image-repository` | Repository to publish the test matrix image to; must be public | this repository |
+| `image-token` | Token with `contents: write` on `image-repository` | `github-token` |
 | `image-retention-days` | Days to keep published images | `30` |
 | `matrix-sections` | Side-by-side sections of the matrix, labelled on top, one `Label=regex` per line | — |
 | `matrix-split` | Stacked bands within each section, labelled on the right, one `Label=regex` per line | — |
