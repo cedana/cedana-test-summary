@@ -39,3 +39,18 @@ jobs:
             CPU
             CUDA=\b(CUDA|GPU)\b
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL_TEST_ONLY }}
+
+      # The release summary picks up the test matrix from the artifact uploaded above.
+      - name: Release summary (dry run)
+        id: release-summary
+        uses: cedana/cedana-publish-summary@feature/ced-2480-include-the-test-matrix-in-release-summaries
+        with:
+          title: cedana-test-summary (sample)
+          slack-webhook-url: unused
+          step-summary: false
+          dry-run: true
+
+      - name: Check the release summary embeds the test matrix
+        env:
+          PAYLOAD: ${{ steps.release-summary.outputs.payload }}
+        run: jq -e '.blocks[] | select(.type == "image")' <<< "$PAYLOAD"
