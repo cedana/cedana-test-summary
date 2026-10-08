@@ -238,6 +238,19 @@ test('divides the matrix into sections and bands only when more than one has tes
     assert.equal(bucketOf(buckets, 'Basic (amd64)'), 'Other');
     assert.equal(bucketOf(parseBuckets('K8s=^Kubernetes'), 'Basic (amd64)'), 'Other', 'implicit catch-all');
 
+    // A label referencing capture groups expands into one bucket per captured value, laid out where the line sits.
+    const versions = parseBuckets('$1=\\b(\\d+-\\d+)\\b\nOther');
+    assert.equal(bucketOf(versions, 'CUDA (12-8, default, amd64)'), '12-8');
+    assert.equal(bucketOf(versions, 'CUDA samples (intercepted, 12-8)'), '12-8');
+    assert.equal(bucketOf(versions, 'CUDA (13-2, streamer, arm64)'), '13-2');
+    assert.equal(bucketOf(versions, 'Basic (amd64)'), 'Other');
+    const cuda = (label) => ({ label, tests: [{ status: 'passed' }] });
+    const byVersion = renderMatrixSvg(
+        [cuda('CUDA (13-2, streamer, arm64)'), cuda('CUDA (12-8, default, amd64)'), cuda('CUDA samples (intercepted, 12-8)'), cuda('Basic (amd64)')],
+        { sections: '$1=\\b(\\d+-\\d+)\\b\nOther' }
+    );
+    assert.deepEqual([...byVersion.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]), ['12-8', '13-2', 'OTHER']);
+
     const sections = 'Kubernetes=^Kubernetes\nSLURM=^Slurm\nOther';
     const split = 'CPU\nCUDA=\\b(CUDA|GPU)\\b';
     const groups = parseReports(files);

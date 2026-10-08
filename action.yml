@@ -69,13 +69,15 @@ inputs:
     description: >-
       Divide the matrix into sections laid out side by side and labelled on top, one line per
       section as `Label=regex` matched against the suite names (first match wins); a line without a
-      regex collects the rest. Shown only when more than one section has tests.
+      regex collects the rest. A label may reference capture groups of its regex (`$1`), giving one
+      section per captured value. Shown only when more than one section has tests.
     required: false
     default: ""
   matrix-split:
     description: >-
       Divide every section into bands stacked top to bottom and labelled on the right, one line per
-      band as `Label=regex`; a line without a regex collects the rest. Shown only when more than one
+      band as `Label=regex`; a line without a regex collects the rest. A label may reference capture
+      groups of its regex (`$1`), giving one band per captured value. Shown only when more than one
       band has tests.
     required: false
     default: ""
