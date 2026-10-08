@@ -5,6 +5,7 @@ const { listJobs, findJob, collectFailedJobs, findPullRequest, upsertComment } =
 const { renderMarkdown, renderSlack } = require('./render');
 const { renderMatrixPng } = require('./image');
 const { publishAsset } = require('./assets');
+const { slugify, uploadSummary } = require('./artifact');
 const { analyze } = require('./ai');
 
 const SERVER_URL = process.env.GITHUB_SERVER_URL || 'https://github.com';
@@ -69,8 +70,7 @@ async function run() {
     if (imageBranch && groups.length > 0) {
         try {
             const png = await renderMatrixPng(groups, matrix);
-            const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tests';
-            const file = `${new Date().toISOString().slice(0, 10)}/${RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT || 1}-${slug}.png`;
+            const file = `${new Date().toISOString().slice(0, 10)}/${RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT || 1}-${slugify(title)}.png`;
             if (dryRun) {
                 core.info(`Dry run; test matrix image (${png.length} bytes) not published as ${file}`);
             } else {
@@ -142,6 +142,13 @@ async function run() {
         core.info('Slack payload:');
         core.info(JSON.stringify(payload, null, 2));
         return;
+    }
+
+    try {
+        const name = await uploadSummary({ title, conclusion, passed: totals.passed, failed: totals.failed, skipped: totals.skipped, imageUrl });
+        core.info(`Uploaded summary as artifact ${name}`);
+    } catch (error) {
+        core.warning(`Could not upload summary artifact: ${error.message}`);
     }
 
     if (prComment) {
