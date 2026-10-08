@@ -247467,6 +247467,8 @@ function escapeXml(text) {
 }
 
 // "Label=regex" per line; a line without "=" collects everything unmatched.
+// A label may reference capture groups of its regex ($1, $2, ...), in which
+// case the line expands into one bucket per distinct captured value.
 function parseBuckets(spec) {
     return (spec || '')
         .split('\n')
@@ -247480,15 +247482,21 @@ function parseBuckets(spec) {
 }
 
 function bucketOf(buckets, label) {
-    const match = buckets.find((b) => b.regex && b.regex.test(label));
-    if (match) return match.label;
+    for (const bucket of buckets) {
+        const match = bucket.regex && bucket.regex.exec(label);
+        if (!match) continue;
+        const name = bucket.label.replace(/\$(\d+)/g, (_, i) => match[i] || '');
+        // Remember expansions, in order of appearance, so they are laid out where the line sits.
+        if (name !== bucket.label && !(bucket.expanded ||= []).includes(name)) bucket.expanded.push(name);
+        return name;
+    }
     const rest = buckets.find((b) => !b.regex);
     return rest ? rest.label : 'Other';
 }
 
 // Buckets that have tests, in spec order (unlisted catch-all last).
 function activeBuckets(buckets, counts) {
-    const order = buckets.map((b) => b.label);
+    const order = buckets.flatMap((b) => b.expanded || [b.label]);
     for (const label of counts.keys()) if (!order.includes(label)) order.push(label);
     return order.filter((label) => (counts.get(label) || 0) > 0);
 }

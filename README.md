@@ -86,6 +86,13 @@ The matrix can be divided into sections laid out side by side and labelled on to
             CUDA=\b(CUDA|GPU)\b
 ```
 
+A label may reference capture groups of its regex (`$1`, `$2`, ...), in which case the line expands into one bucket per distinct captured value, in order of appearance. This sections a matrix by a value swept at runtime without listing it, such as the CUDA version in suites named `CUDA (12-8, default, amd64)`:
+
+```yaml
+          matrix-sections: |
+            $1=\b(\d+-\d+)\b
+```
+
 Labels use the bundled [Inter](https://rsms.me/inter/) font (SIL Open Font License, see `assets/`).
 
 ### Release summary
@@ -113,8 +120,8 @@ The outputs of the summary (title, conclusion, counts, and the image URL) are al
 | `image-repository` | Repository to publish the test matrix image to; must be public | this repository |
 | `image-token` | Token with `contents: write` on `image-repository` | `github-token` |
 | `image-retention-days` | Days to keep published images | `30` |
-| `matrix-sections` | Side-by-side sections of the matrix, labelled on top, one `Label=regex` per line | — |
-| `matrix-split` | Stacked bands within each section, labelled on the right, one `Label=regex` per line | — |
+| `matrix-sections` | Side-by-side sections of the matrix, labelled on top, one `Label=regex` per line (`$1` in the label expands per captured value) | — |
+| `matrix-split` | Stacked bands within each section, labelled on the right, one `Label=regex` per line (`$1` in the label expands per captured value) | — |
 | `dry-run` | Build the summary without posting | `false` |
 
 ## Outputs
