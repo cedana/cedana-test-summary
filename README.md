@@ -88,6 +88,10 @@ The matrix can be divided into sections laid out side by side and labelled on to
 
 Labels use the bundled [Inter](https://rsms.me/inter/) font (SIL Open Font License, see `assets/`).
 
+### Release summary
+
+The outputs of the summary (title, conclusion, counts, and the image URL) are also uploaded as a `test-summary-<title>` artifact of the workflow run, so that jobs running later in the same run can pick them up. [cedana-publish-summary](https://github.com/cedana/cedana-publish-summary) uses this to embed the test matrix in the release summary when tests ran before publishing.
+
 ### Permissions
 
 `actions: read` to list the jobs of the run, `pull-requests: write` to comment, `contents: write` to publish the image. Without `actions: read` the summary is still posted, without job links or failed-job detection; without `contents: write` it is posted without the image.
