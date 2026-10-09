@@ -225,10 +225,16 @@ test('renders the test matrix as one square per test in suite order', async () =
     assert.deepEqual(fills.slice(0, 6), [COLORS.passed, COLORS.passed, COLORS.skipped, COLORS.passed, COLORS.passed, COLORS.failed]);
     // Then CUDA: pass, fail, flaky.
     assert.deepEqual(fills.slice(6, 9), [COLORS.passed, COLORS.failed, COLORS.flaky]);
-    assert.deepEqual(layout(1500), { cols: 68, rows: 23, width: 889, height: 304 });
+    assert.deepEqual(layout(1500), { cols: 68, rows: 23, width: 881, height: 304 });
+    // No side margins: the first square sits on the left edge and the image ends at the last column.
+    assert.match(svg, /<rect x="0" y="\d+"/);
+    const [, width] = svg.match(/<svg[^>]* width="(\d+)"/);
+    assert.equal(Number(width), layout(11).width);
 
     const png = await renderMatrixPng(r.groups);
     assert.deepEqual([...png.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    // The PNG ends at the last square, even when the grid's columns are not all used (11 squares, 12 columns).
+    assert.equal(png.readUInt32BE(16), (11 * 13 - 3) * 2, 'PNG is exactly as wide as the squares');
 });
 
 test('divides the matrix into sections and bands only when more than one has tests', async () => {

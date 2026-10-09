@@ -2,7 +2,7 @@ const core = require('@actions/core');
 const glob = require('@actions/glob');
 const { parseReports } = require('./junit');
 const { listJobs, findJob, collectFailedJobs, findPullRequest, upsertComment } = require('./github');
-const { renderMarkdown, renderSlack } = require('./render');
+const { renderMarkdown, renderSlack, summaryLine } = require('./render');
 const { renderMatrixPng } = require('./image');
 const { publishAsset } = require('./assets');
 const { slugify, uploadSummary } = require('./artifact');
@@ -145,7 +145,15 @@ async function run() {
     }
 
     try {
-        const name = await uploadSummary({ title, conclusion, passed: totals.passed, failed: totals.failed, skipped: totals.skipped, imageUrl });
+        const name = await uploadSummary({
+            title,
+            conclusion,
+            passed: totals.passed,
+            failed: totals.failed,
+            skipped: totals.skipped,
+            summary: summaryLine(totals, groups),
+            imageUrl,
+        });
         core.info(`Uploaded summary as artifact ${name}`);
     } catch (error) {
         core.warning(`Could not upload summary artifact: ${error.message}`);
