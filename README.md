@@ -97,7 +97,7 @@ Labels use the bundled [Inter](https://rsms.me/inter/) font (SIL Open Font Licen
 
 ### Release summary
 
-The outputs of the summary (title, conclusion, counts, and the image URL) are also uploaded as a `test-summary-<title>` artifact of the workflow run, so that jobs running later in the same run can pick them up. [cedana-publish-summary](https://github.com/cedana/cedana-publish-summary) uses this to embed the test matrix in the release summary when tests ran before publishing.
+The outputs of the summary (title, conclusion, counts, the one-line summary, and the image URL) are also uploaded as a `test-summary-<title>` artifact of the workflow run, so that jobs running later in the same run can pick them up. [cedana-publish-summary](https://github.com/cedana/cedana-publish-summary) uses this to embed the test matrix and its summary line in the release summary when tests ran before publishing.
 
 ### Permissions
 

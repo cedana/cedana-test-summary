@@ -334,4 +334,4 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context, ima
     return { blocks: blocks.slice(0, MAX_BLOCKS) };
 }
 
-module.exports = { renderMarkdown, renderSlack, duration };
+module.exports = { renderMarkdown, renderSlack, summaryLine, duration };

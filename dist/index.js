@@ -247181,9 +247181,10 @@ const os = __nccwpck_require__(70857);
 const path = __nccwpck_require__(16928);
 const { DefaultArtifactClient } = __nccwpck_require__(76846);
 
-// Artifacts named `test-summary-<slug>` carry the outputs of a summary to later
-// jobs of the same workflow run, e.g. cedana-publish-summary embeds the test
-// matrix image in the release summary.
+// Artifacts named `test-summary-<slug>` carry the outputs of a summary (plus
+// the one-line summary as markdown) to later jobs of the same workflow run,
+// e.g. cedana-publish-summary embeds the test matrix image and that line in
+// the release summary.
 const ARTIFACT_PREFIX = 'test-summary-';
 const ARTIFACT_FILE = 'test-summary.json';
 
@@ -247433,7 +247434,7 @@ const CELL = 10;
 const GAP = 3;
 const STEP = CELL + GAP;
 const RADIUS = 2;
-const PADDING = 4;
+const PADDING = 4; // top and bottom only: the image is flush with its left and right edges
 const MIN_COLS = 12;
 const MAX_COLS = 80;
 const SCALE = 2;
@@ -247508,7 +247509,7 @@ function layout(count) {
     return {
         cols,
         rows,
-        width: cols * STEP - GAP + PADDING * 2,
+        width: cols * STEP - GAP,
         height: rows * STEP - GAP + PADDING * 2,
     };
 }
@@ -247580,7 +247581,7 @@ function renderMatrixSvg(groups, { sections = '', split = '' } = {}) {
     });
     const gridBottom = y - BAND_GAP;
 
-    let x = PADDING;
+    let x = 0;
     columns.forEach((section, i) => {
         if (section !== null) parts.push(text(x, PADDING + FONT_SIZE, section));
         bands.forEach((band, b) => {
@@ -247592,10 +247593,10 @@ function renderMatrixSvg(groups, { sections = '', split = '' } = {}) {
     });
     const gridRight = x - SECTION_GAP;
 
-    let width = gridRight + PADDING;
+    let width = gridRight;
     if (showSplit) {
         bands.forEach((band, b) => parts.push(text(gridRight + LABEL_GAP, bandY[b] + CELL - 1, band)));
-        width = gridRight + LABEL_GAP + Math.ceil(Math.max(...bands.map((band) => band.length)) * CHAR_WIDTH) + PADDING;
+        width = gridRight + LABEL_GAP + Math.ceil(Math.max(...bands.map((band) => band.length)) * CHAR_WIDTH);
     }
     const height = gridBottom + PADDING;
 
@@ -247621,10 +247622,15 @@ async function svgToPng(svg) {
         fontBuffer = fs.readFileSync(assetPath('Inter-Regular.ttf', 'assets/Inter-Regular.ttf'));
     }
     await wasmReady;
-    const resvg = new Resvg(svg, {
-        fitTo: { mode: 'zoom', value: SCALE },
-        font: { fontBuffers: [fontBuffer], defaultFontFamily: FONT_FAMILY },
-    });
+    const font = { fontBuffers: [fontBuffer], defaultFontFamily: FONT_FAMILY };
+    // Label widths in the SVG are estimates; end the image exactly where the
+    // rendered content does so that it is flush with its right edge.
+    const bbox = new Resvg(svg, { font }).getBBox();
+    if (bbox) {
+        const width = Math.ceil(bbox.x + bbox.width);
+        svg = svg.replace(/width="\d+" height="(\d+)" viewBox="0 0 \d+ /, `width="${width}" height="$1" viewBox="0 0 ${width} `);
+    }
+    const resvg = new Resvg(svg, { fitTo: { mode: 'zoom', value: SCALE }, font });
     return Buffer.from(resvg.render().asPng());
 }
 
@@ -248129,7 +248135,7 @@ function renderSlack({ title, groups, totals, failedJobs, analysis, context, ima
     return { blocks: blocks.slice(0, MAX_BLOCKS) };
 }
 
-module.exports = { renderMarkdown, renderSlack, duration };
+module.exports = { renderMarkdown, renderSlack, summaryLine, duration };
 
 
 /***/ }),
@@ -248609,7 +248615,7 @@ const core = __nccwpck_require__(37484);
 const glob = __nccwpck_require__(47206);
 const { parseReports } = __nccwpck_require__(66048);
 const { listJobs, findJob, collectFailedJobs, findPullRequest, upsertComment } = __nccwpck_require__(96377);
-const { renderMarkdown, renderSlack } = __nccwpck_require__(62402);
+const { renderMarkdown, renderSlack, summaryLine } = __nccwpck_require__(62402);
 const { renderMatrixPng } = __nccwpck_require__(44177);
 const { publishAsset } = __nccwpck_require__(36203);
 const { slugify, uploadSummary } = __nccwpck_require__(52300);
@@ -248752,7 +248758,15 @@ async function run() {
     }
 
     try {
-        const name = await uploadSummary({ title, conclusion, passed: totals.passed, failed: totals.failed, skipped: totals.skipped, imageUrl });
+        const name = await uploadSummary({
+            title,
+            conclusion,
+            passed: totals.passed,
+            failed: totals.failed,
+            skipped: totals.skipped,
+            summary: summaryLine(totals, groups),
+            imageUrl,
+        });
         core.info(`Uploaded summary as artifact ${name}`);
     } catch (error) {
         core.warning(`Could not upload summary artifact: ${error.message}`);

@@ -11,7 +11,7 @@ const CELL = 10;
 const GAP = 3;
 const STEP = CELL + GAP;
 const RADIUS = 2;
-const PADDING = 4;
+const PADDING = 4; // top and bottom only: the image is flush with its left and right edges
 const MIN_COLS = 12;
 const MAX_COLS = 80;
 const SCALE = 2;
@@ -86,7 +86,7 @@ function layout(count) {
     return {
         cols,
         rows,
-        width: cols * STEP - GAP + PADDING * 2,
+        width: cols * STEP - GAP,
         height: rows * STEP - GAP + PADDING * 2,
     };
 }
@@ -158,7 +158,7 @@ function renderMatrixSvg(groups, { sections = '', split = '' } = {}) {
     });
     const gridBottom = y - BAND_GAP;
 
-    let x = PADDING;
+    let x = 0;
     columns.forEach((section, i) => {
         if (section !== null) parts.push(text(x, PADDING + FONT_SIZE, section));
         bands.forEach((band, b) => {
@@ -170,10 +170,10 @@ function renderMatrixSvg(groups, { sections = '', split = '' } = {}) {
     });
     const gridRight = x - SECTION_GAP;
 
-    let width = gridRight + PADDING;
+    let width = gridRight;
     if (showSplit) {
         bands.forEach((band, b) => parts.push(text(gridRight + LABEL_GAP, bandY[b] + CELL - 1, band)));
-        width = gridRight + LABEL_GAP + Math.ceil(Math.max(...bands.map((band) => band.length)) * CHAR_WIDTH) + PADDING;
+        width = gridRight + LABEL_GAP + Math.ceil(Math.max(...bands.map((band) => band.length)) * CHAR_WIDTH);
     }
     const height = gridBottom + PADDING;
 
@@ -199,10 +199,15 @@ async function svgToPng(svg) {
         fontBuffer = fs.readFileSync(assetPath('Inter-Regular.ttf', 'assets/Inter-Regular.ttf'));
     }
     await wasmReady;
-    const resvg = new Resvg(svg, {
-        fitTo: { mode: 'zoom', value: SCALE },
-        font: { fontBuffers: [fontBuffer], defaultFontFamily: FONT_FAMILY },
-    });
+    const font = { fontBuffers: [fontBuffer], defaultFontFamily: FONT_FAMILY };
+    // Label widths in the SVG are estimates; end the image exactly where the
+    // rendered content does so that it is flush with its right edge.
+    const bbox = new Resvg(svg, { font }).getBBox();
+    if (bbox) {
+        const width = Math.ceil(bbox.x + bbox.width);
+        svg = svg.replace(/width="\d+" height="(\d+)" viewBox="0 0 \d+ /, `width="${width}" height="$1" viewBox="0 0 ${width} `);
+    }
+    const resvg = new Resvg(svg, { fitTo: { mode: 'zoom', value: SCALE }, font });
     return Buffer.from(resvg.render().asPng());
 }
 
