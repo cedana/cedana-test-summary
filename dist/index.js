@@ -247206,7 +247206,44 @@ async function uploadSummary(summary) {
     return name;
 }
 
-module.exports = { ARTIFACT_PREFIX, ARTIFACT_FILE, slugify, uploadSummary };
+// The newest artifact of each name that was uploaded more than once in the
+// run, i.e. by a job that was re-run.
+function rerunArtifacts(artifacts) {
+    const all = new Map();
+    for (const artifact of artifacts) {
+        all.set(artifact.name, [...(all.get(artifact.name) || []), artifact]);
+    }
+    const newest = new Map();
+    for (const [name, list] of all) {
+        if (list.length > 1) {
+            newest.set(name, list.reduce((a, b) => (b.createdAt > a.createdAt ? b : a)));
+        }
+    }
+    return newest;
+}
+
+// When a re-run job uploads its report under the same name again,
+// actions/download-artifact keeps the artifact with the highest id, and ids
+// are not ordered by creation time, so a report can be an earlier attempt's.
+// Replace each report directory named after such an artifact with the newest
+// one. Returns the number of directories replaced.
+async function refreshRerunReports(files, log) {
+    const client = new DefaultArtifactClient();
+    const { artifacts } = await client.listArtifacts();
+    const newest = rerunArtifacts(artifacts);
+    let replaced = 0;
+    for (const dir of new Set(files.map((file) => path.dirname(file)))) {
+        const artifact = newest.get(path.basename(dir));
+        if (!artifact) continue;
+        fs.rmSync(dir, { recursive: true, force: true });
+        await client.downloadArtifact(artifact.id, { path: dir });
+        log(`Replaced ${dir} with the newest ${artifact.name} artifact (${artifact.id})`);
+        replaced++;
+    }
+    return replaced;
+}
+
+module.exports = { ARTIFACT_PREFIX, ARTIFACT_FILE, slugify, uploadSummary, rerunArtifacts, refreshRerunReports };
 
 
 /***/ }),
@@ -248618,7 +248655,7 @@ const { listJobs, findJob, collectFailedJobs, findPullRequest, upsertComment } =
 const { renderMarkdown, renderSlack, summaryLine } = __nccwpck_require__(62402);
 const { renderMatrixPng } = __nccwpck_require__(44177);
 const { publishAsset } = __nccwpck_require__(36203);
-const { slugify, uploadSummary } = __nccwpck_require__(52300);
+const { slugify, uploadSummary, refreshRerunReports } = __nccwpck_require__(52300);
 const { analyze } = __nccwpck_require__(54992);
 
 const SERVER_URL = process.env.GITHUB_SERVER_URL || 'https://github.com';
@@ -248643,7 +248680,16 @@ async function run() {
     const matrix = { sections: core.getInput('matrix-sections'), split: core.getInput('matrix-split') };
     const dryRun = core.getBooleanInput('dry-run');
 
-    const files = await (await glob.create(patterns)).glob();
+    let files = await (await glob.create(patterns)).glob();
+    if (process.env.ACTIONS_RUNTIME_TOKEN) {
+        try {
+            if (await refreshRerunReports(files, core.info)) {
+                files = await (await glob.create(patterns)).glob();
+            }
+        } catch (error) {
+            core.warning(`Could not check for reports of re-run jobs: ${error.message}`);
+        }
+    }
     core.info(`Found ${files.length} report file(s)`);
     const groups = parseReports(files, core.info);
 

@@ -58,6 +58,8 @@ Reports are grouped by the `name` attribute of the `<testsuites>` root element, 
 
 Several report files may share one name (for example an isolated and a persistent run of the same suite); they are aggregated, and the file name distinguishes failures (`report-persistent.xml` → `persistent`).
 
+When a job is re-run, it uploads its report again under the same name, and `actions/download-artifact` may pick an earlier attempt's copy. The action re-downloads each such report directory (named after its artifact) from the newest artifact of that name, so a summary of a re-run always reflects the latest attempt.
+
 ### Test matrix image
 
 GitHub comments and Slack webhooks can only embed images by public URL, so the matrix is committed to a branch of the repository (`image-branch`, created when missing) and referenced through raw.githubusercontent.com. The branch is rewritten as a single commit on every run and images older than `image-retention-days` are dropped, so it never grows beyond a few weeks of images. This requires a public repository and `contents: write`.

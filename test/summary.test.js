@@ -8,6 +8,7 @@ const { renderMarkdown, renderSlack, duration } = require('../src/render');
 const { renderMatrixSvg, renderMatrixPng, layout, parseBuckets, bucketOf, COLORS } = require('../src/image');
 const { findJob, collectFailedJobs } = require('../src/github');
 const { describeFailures } = require('../src/ai');
+const { rerunArtifacts } = require('../src/artifact');
 
 const fixtures = path.join(__dirname, 'fixtures');
 const files = fs
@@ -303,4 +304,17 @@ test('formats durations', () => {
     assert.equal(duration(723), '12m 3s');
     assert.equal(duration(3600), '1h');
     assert.equal(duration(3725), '1h 2m');
+});
+
+test('picks the newest artifact of re-run jobs, not the highest id', () => {
+    // From a real run: the re-run's report got a lower id than the earlier attempt's.
+    const artifact = (id, name, createdAt) => ({ id, name, createdAt: new Date(createdAt) });
+    const newest = rerunArtifacts([
+        artifact(12069089460, 'test-report-arm64-containerd', '2026-10-16T19:15:13Z'),
+        artifact(12071361280, 'test-report-arm64-containerd', '2026-10-16T19:46:56Z'),
+        artifact(12071107474, 'test-report-arm64-containerd', '2026-10-16T19:51:14Z'),
+        artifact(12069745553, 'test-report-amd64-runc', '2026-10-16T19:15:37Z'),
+    ]);
+    assert.deepEqual([...newest.keys()], ['test-report-arm64-containerd']);
+    assert.equal(newest.get('test-report-arm64-containerd').id, 12071107474);
 });
