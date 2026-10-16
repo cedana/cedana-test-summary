@@ -5,7 +5,7 @@ const { listJobs, findJob, collectFailedJobs, findPullRequest, upsertComment } =
 const { renderMarkdown, renderSlack, summaryLine } = require('./render');
 const { renderMatrixPng } = require('./image');
 const { publishAsset } = require('./assets');
-const { slugify, uploadSummary } = require('./artifact');
+const { slugify, uploadSummary, refreshRerunReports } = require('./artifact');
 const { analyze } = require('./ai');
 
 const SERVER_URL = process.env.GITHUB_SERVER_URL || 'https://github.com';
@@ -30,7 +30,16 @@ async function run() {
     const matrix = { sections: core.getInput('matrix-sections'), split: core.getInput('matrix-split') };
     const dryRun = core.getBooleanInput('dry-run');
 
-    const files = await (await glob.create(patterns)).glob();
+    let files = await (await glob.create(patterns)).glob();
+    if (process.env.ACTIONS_RUNTIME_TOKEN) {
+        try {
+            if (await refreshRerunReports(files, core.info)) {
+                files = await (await glob.create(patterns)).glob();
+            }
+        } catch (error) {
+            core.warning(`Could not check for reports of re-run jobs: ${error.message}`);
+        }
+    }
     core.info(`Found ${files.length} report file(s)`);
     const groups = parseReports(files, core.info);
 
