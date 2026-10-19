@@ -57,13 +57,14 @@ async function run() {
     }
     const failedJobs = collectFailedJobs(jobs, groups, jobsFilter);
 
-    const totals = { total: 0, passed: 0, failed: 0, skipped: 0, flaky: 0 };
+    const totals = { total: 0, passed: 0, failed: 0, skipped: 0, flaky: 0, warnings: 0 };
     for (const group of groups) {
         totals.total += group.total;
         totals.passed += group.passed;
         totals.failed += group.failed;
         totals.skipped += group.skipped;
         totals.flaky += group.flaky;
+        totals.warnings += group.warnings.length;
     }
 
     // Wall-clock time of the run's test jobs, and the sum of all test durations.

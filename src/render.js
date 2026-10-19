@@ -6,6 +6,7 @@ const MAX_MESSAGE_LINES = 14;
 const MESSAGE_HEAD_LINES = 4;
 const MAX_MESSAGE_CHARS = 2500;
 const MAX_FLAKY_TESTS = 20;
+const MAX_WARNINGS_PER_GROUP = 20;
 
 const MAX_BLOCKS = 50;
 const MAX_SECTION_TEXT = 3000;
@@ -105,6 +106,7 @@ function summaryLine(totals, groups) {
     parts.push(`${n(totals.passed)} passed`);
     if (totals.skipped > 0) parts.push(`${n(totals.skipped)} skipped`);
     if (totals.flaky > 0) parts.push(`${n(totals.flaky)} flaky`);
+    if (totals.warnings > 0) parts.push(plural(totals.warnings, 'warning'));
     parts.push(plural(groups.length, 'suite'));
     return parts.join(' · ');
 }
@@ -182,6 +184,36 @@ function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
             out.push(`- ${link(escapeMd(job.name), job.html_url)} — ${job.reason}`);
         }
         out.push('');
+    }
+
+    // Suites that raised warnings (see parseWarnings), whether or not their tests failed
+    const warned = sorted.filter((g) => g.warnings?.length > 0);
+    if (warned.length > 0) {
+        out.push('### Warnings');
+        out.push('');
+        for (const group of warned) {
+            const logs = group.job?.html_url ? ` · <a href="${group.job.html_url}">logs</a>` : '';
+            out.push('<details open>');
+            out.push(`<summary><b>${escapeHtml(group.label)}</b> · ${plural(group.warnings.length, 'warning')}${logs}</summary>`);
+            out.push('');
+            for (const warning of group.warnings.slice(0, MAX_WARNINGS_PER_GROUP)) {
+                out.push(`**${escapeMd(warning.title)}**${warning.test ? ` — _${escapeMd(warning.test)}_` : ''}`);
+                const detail = clipMessage(warning.detail, messageLines);
+                if (detail) {
+                    out.push('');
+                    out.push('```');
+                    out.push(detail.replace(/```/g, '` ` `'));
+                    out.push('```');
+                }
+                out.push('');
+            }
+            if (group.warnings.length > MAX_WARNINGS_PER_GROUP) {
+                out.push(`_… ${n(group.warnings.length - MAX_WARNINGS_PER_GROUP)} more warnings_`);
+                out.push('');
+            }
+            out.push('</details>');
+            out.push('');
+        }
     }
 
     const flaky = flakyTests(sorted);

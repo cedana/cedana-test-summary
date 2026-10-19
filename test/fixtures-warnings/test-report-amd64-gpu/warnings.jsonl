@@ -1,0 +1,5 @@
+{"title":"GPU shared memory left behind after the suite (leaked)","detail":"/dev/shm/cedana-gpu.abc (1.0G), held by: none\n  spawned by the daemon logging to /tmp/cedana-daemon-1.log"}
+not json
+
+{"title":"GPU sanity check failed","test":"restore GPU pod"}
+{"title":"GPU shared memory left behind after the suite (leaked)","detail":"/dev/shm/cedana-gpu.abc (1.0G), held by: none\n  spawned by the daemon logging to /tmp/cedana-daemon-1.log"}

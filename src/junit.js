@@ -102,6 +102,39 @@ function parseReport(file) {
     return { label, variant, time, tests: [...tests.values()] };
 }
 
+// Warnings a job's suites raised (e.g. GPU shared memory they leaked), from a warnings.jsonl
+// beside its reports (uploaded in the same artifact): one JSON object per line, with a
+// title, and optionally a detail and the test that raised it. Bad lines are skipped.
+function parseWarnings(file, log = () => {}) {
+    let content;
+    try {
+        content = fs.readFileSync(file, 'utf8');
+    } catch (error) {
+        if (error.code !== 'ENOENT') log(`Could not read warnings ${file}: ${error.message}`);
+        return [];
+    }
+    const warnings = [];
+    content.split('\n').forEach((line, i) => {
+        if (!line.trim()) return;
+        let entry;
+        try {
+            entry = JSON.parse(line);
+        } catch {
+            entry = null;
+        }
+        if (!entry || typeof entry.title !== 'string' || !entry.title.trim()) {
+            log(`Skipping invalid warning on line ${i + 1} of ${file}`);
+            return;
+        }
+        warnings.push({
+            title: stripAnsi(entry.title).trim(),
+            detail: typeof entry.detail === 'string' ? stripAnsi(entry.detail).trimEnd() : '',
+            test: typeof entry.test === 'string' ? entry.test.trim() : '',
+        });
+    });
+    return warnings;
+}
+
 // Parse all files and group them by label. Each group aggregates every report
 // file that shares the label (e.g. the isolated and persistent runs of one job).
 function parseReports(files, log = () => {}) {
@@ -114,8 +147,19 @@ function parseReports(files, log = () => {}) {
         }
         let group = groups.get(report.label);
         if (!group) {
-            group = { label: report.label, files: [], variants: new Set(), tests: [], time: 0 };
+            group = { label: report.label, files: [], variants: new Set(), tests: [], time: 0, dirs: new Set(), warnings: [], seen: new Set() };
             groups.set(report.label, group);
+        }
+        // A job's report files share a directory, and so its warnings: read them once
+        const dir = path.dirname(file);
+        if (!group.dirs.has(dir)) {
+            group.dirs.add(dir);
+            for (const warning of parseWarnings(path.join(dir, 'warnings.jsonl'), log)) {
+                const key = `${warning.title}\n${warning.detail}\n${warning.test}`;
+                if (group.seen.has(key)) continue;
+                group.seen.add(key);
+                group.warnings.push(warning);
+            }
         }
         group.files.push(file);
         group.variants.add(report.variant);
@@ -138,9 +182,10 @@ function parseReports(files, log = () => {}) {
             failed: count('failed'),
             skipped: count('skipped'),
             flaky: group.tests.filter((t) => t.flaky).length,
+            warnings: group.warnings,
         });
     }
     return result;
 }
 
-module.exports = { parseReport, parseReports };
+module.exports = { parseReport, parseReports, parseWarnings };
