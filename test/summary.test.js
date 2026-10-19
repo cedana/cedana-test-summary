@@ -318,3 +318,26 @@ test('picks the newest artifact of re-run jobs, not the highest id', () => {
     assert.deepEqual([...newest.keys()], ['test-report-arm64-containerd']);
     assert.equal(newest.get('test-report-arm64-containerd').id, 12071107474);
 });
+
+test('reads the warnings beside a job reports once, skipping bad lines and duplicates', () => {
+    const dir = path.join(__dirname, 'fixtures-warnings', 'test-report-amd64-gpu');
+    const logs = [];
+    const groups = parseReports(['report-isolated.xml', 'report-persistent.xml'].map((f) => path.join(dir, f)), (m) => logs.push(m));
+    assert.equal(groups.length, 1);
+    const [group] = groups;
+    assert.deepEqual(
+        group.warnings.map((w) => [w.title, w.test]),
+        [
+            ['GPU shared memory left behind after the suite (leaked)', ''],
+            ['GPU sanity check failed', 'restore GPU pod'],
+        ]
+    );
+    assert.ok(logs.some((m) => m.includes('line 2')));
+
+    const totals = { passed: group.passed, failed: 0, skipped: 0, flaky: 0, warnings: group.warnings.length };
+    const markdown = renderMarkdown({ ...report(), groups, totals, failedJobs: [], imageUrl: '' });
+    assert.match(markdown, /2 passed · 2 warnings · 1 suite/);
+    assert.match(markdown, /### Warnings[\s\S]*<b>GPU \(amd64\)<\/b> · 2 warnings/);
+    assert.match(markdown, /\*\*GPU sanity check failed\*\* — _restore GPU pod_/);
+    assert.match(markdown, /```\n\/dev\/shm\/cedana-gpu\.abc/);
+});

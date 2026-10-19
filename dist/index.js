@@ -247787,6 +247787,39 @@ function parseReport(file) {
     return { label, variant, time, tests: [...tests.values()] };
 }
 
+// Warnings a job's suites raised (e.g. GPU shared memory they leaked), from a warnings.jsonl
+// beside its reports (uploaded in the same artifact): one JSON object per line, with a
+// title, and optionally a detail and the test that raised it. Bad lines are skipped.
+function parseWarnings(file, log = () => {}) {
+    let content;
+    try {
+        content = fs.readFileSync(file, 'utf8');
+    } catch (error) {
+        if (error.code !== 'ENOENT') log(`Could not read warnings ${file}: ${error.message}`);
+        return [];
+    }
+    const warnings = [];
+    content.split('\n').forEach((line, i) => {
+        if (!line.trim()) return;
+        let entry;
+        try {
+            entry = JSON.parse(line);
+        } catch {
+            entry = null;
+        }
+        if (!entry || typeof entry.title !== 'string' || !entry.title.trim()) {
+            log(`Skipping invalid warning on line ${i + 1} of ${file}`);
+            return;
+        }
+        warnings.push({
+            title: stripAnsi(entry.title).trim(),
+            detail: typeof entry.detail === 'string' ? stripAnsi(entry.detail).trimEnd() : '',
+            test: typeof entry.test === 'string' ? entry.test.trim() : '',
+        });
+    });
+    return warnings;
+}
+
 // Parse all files and group them by label. Each group aggregates every report
 // file that shares the label (e.g. the isolated and persistent runs of one job).
 function parseReports(files, log = () => {}) {
@@ -247799,8 +247832,19 @@ function parseReports(files, log = () => {}) {
         }
         let group = groups.get(report.label);
         if (!group) {
-            group = { label: report.label, files: [], variants: new Set(), tests: [], time: 0 };
+            group = { label: report.label, files: [], variants: new Set(), tests: [], time: 0, dirs: new Set(), warnings: [], seen: new Set() };
             groups.set(report.label, group);
+        }
+        // A job's report files share a directory, and so its warnings: read them once
+        const dir = path.dirname(file);
+        if (!group.dirs.has(dir)) {
+            group.dirs.add(dir);
+            for (const warning of parseWarnings(path.join(dir, 'warnings.jsonl'), log)) {
+                const key = `${warning.title}\n${warning.detail}\n${warning.test}`;
+                if (group.seen.has(key)) continue;
+                group.seen.add(key);
+                group.warnings.push(warning);
+            }
         }
         group.files.push(file);
         group.variants.add(report.variant);
@@ -247823,12 +247867,13 @@ function parseReports(files, log = () => {}) {
             failed: count('failed'),
             skipped: count('skipped'),
             flaky: group.tests.filter((t) => t.flaky).length,
+            warnings: group.warnings,
         });
     }
     return result;
 }
 
-module.exports = { parseReport, parseReports };
+module.exports = { parseReport, parseReports, parseWarnings };
 
 
 /***/ }),
@@ -247844,6 +247889,7 @@ const MAX_MESSAGE_LINES = 14;
 const MESSAGE_HEAD_LINES = 4;
 const MAX_MESSAGE_CHARS = 2500;
 const MAX_FLAKY_TESTS = 20;
+const MAX_WARNINGS_PER_GROUP = 20;
 
 const MAX_BLOCKS = 50;
 const MAX_SECTION_TEXT = 3000;
@@ -247943,6 +247989,7 @@ function summaryLine(totals, groups) {
     parts.push(`${n(totals.passed)} passed`);
     if (totals.skipped > 0) parts.push(`${n(totals.skipped)} skipped`);
     if (totals.flaky > 0) parts.push(`${n(totals.flaky)} flaky`);
+    if (totals.warnings > 0) parts.push(plural(totals.warnings, 'warning'));
     parts.push(plural(groups.length, 'suite'));
     return parts.join(' · ');
 }
@@ -248020,6 +248067,36 @@ function renderMarkdown(report, messageLines = MAX_MESSAGE_LINES) {
             out.push(`- ${link(escapeMd(job.name), job.html_url)} — ${job.reason}`);
         }
         out.push('');
+    }
+
+    // Suites that raised warnings (see parseWarnings), whether or not their tests failed
+    const warned = sorted.filter((g) => g.warnings?.length > 0);
+    if (warned.length > 0) {
+        out.push('### Warnings');
+        out.push('');
+        for (const group of warned) {
+            const logs = group.job?.html_url ? ` · <a href="${group.job.html_url}">logs</a>` : '';
+            out.push('<details open>');
+            out.push(`<summary><b>${escapeHtml(group.label)}</b> · ${plural(group.warnings.length, 'warning')}${logs}</summary>`);
+            out.push('');
+            for (const warning of group.warnings.slice(0, MAX_WARNINGS_PER_GROUP)) {
+                out.push(`**${escapeMd(warning.title)}**${warning.test ? ` — _${escapeMd(warning.test)}_` : ''}`);
+                const detail = clipMessage(warning.detail, messageLines);
+                if (detail) {
+                    out.push('');
+                    out.push('```');
+                    out.push(detail.replace(/```/g, '` ` `'));
+                    out.push('```');
+                }
+                out.push('');
+            }
+            if (group.warnings.length > MAX_WARNINGS_PER_GROUP) {
+                out.push(`_… ${n(group.warnings.length - MAX_WARNINGS_PER_GROUP)} more warnings_`);
+                out.push('');
+            }
+            out.push('</details>');
+            out.push('');
+        }
     }
 
     const flaky = flakyTests(sorted);
@@ -248707,13 +248784,14 @@ async function run() {
     }
     const failedJobs = collectFailedJobs(jobs, groups, jobsFilter);
 
-    const totals = { total: 0, passed: 0, failed: 0, skipped: 0, flaky: 0 };
+    const totals = { total: 0, passed: 0, failed: 0, skipped: 0, flaky: 0, warnings: 0 };
     for (const group of groups) {
         totals.total += group.total;
         totals.passed += group.passed;
         totals.failed += group.failed;
         totals.skipped += group.skipped;
         totals.flaky += group.flaky;
+        totals.warnings += group.warnings.length;
     }
 
     // Wall-clock time of the run's test jobs, and the sum of all test durations.

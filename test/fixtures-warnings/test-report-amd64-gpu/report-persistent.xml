@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="GPU (amd64)" time="1">
+<testsuite name="test/regression/plugins/gpu.bats" tests="1" failures="0" errors="0" skipped="0" time="1" timestamp="2026-10-19T00:00:00" hostname="runner">
+    <testcase classname="test/regression/plugins/gpu.bats" name="dump GPU process" time="1" />
+</testsuite>
+</testsuites>
