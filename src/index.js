@@ -163,6 +163,7 @@ async function run() {
             skipped: totals.skipped,
             summary: summaryLine(totals, groups),
             imageUrl,
+            markdown,
         });
         core.info(`Uploaded summary as artifact ${name}`);
     } catch (error) {
