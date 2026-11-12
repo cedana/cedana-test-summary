@@ -247352,14 +247352,14 @@ async function request(token, endpoint, { method = 'GET', body } = {}) {
     throw lastError;
 }
 
-async function paginate(token, endpoint, pick, maxPages = 10) {
+async function paginate(token, endpoint, pick, maxPages = 10, perPage = 100) {
     const items = [];
     for (let page = 1; page <= maxPages; page++) {
         const sep = endpoint.includes('?') ? '&' : '?';
-        const data = await request(token, `${endpoint}${sep}per_page=100&page=${page}`);
+        const data = await request(token, `${endpoint}${sep}per_page=${perPage}&page=${page}`);
         const batch = pick(data);
         items.push(...batch);
-        if (batch.length < 100) break;
+        if (batch.length < perPage) break;
     }
     return items;
 }
@@ -247372,7 +247372,9 @@ async function listJobs(token, repository, runId, attempt = process.env.GITHUB_R
     const endpoint = attempt
         ? `/repos/${repository}/actions/runs/${runId}/attempts/${attempt}/jobs`
         : `/repos/${repository}/actions/runs/${runId}/jobs?filter=latest`;
-    return paginate(token, endpoint, (d) => d.jobs);
+    // 30 a page: a page of 100 jobs (with their steps) often times out with a 502 on large runs,
+    // 3 times in a row (~40s), and the summary then has no job links nor failed jobs
+    return paginate(token, endpoint, (d) => d.jobs, 34, 30);
 }
 
 // A report label matches the job whose display name is the label itself or
